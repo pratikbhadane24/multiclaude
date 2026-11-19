@@ -92,6 +92,9 @@ func (a *App) setupAccount(acct registry.Account, accts []registry.Account) int 
 	if err := os.MkdirAll(acct.Dir, accountDirMode); err != nil {
 		return a.errorf("create %s: %v", acct.Dir, err)
 	}
+	if !a.migrateHistory(acct) {
+		return ExitError
+	}
 	if _, err := links.LinkMissing(a.Paths, acct.Dir); err != nil {
 		return a.errorf("link shared config: %v", err)
 	}

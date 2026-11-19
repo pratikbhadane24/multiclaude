@@ -34,6 +34,9 @@ func (a *App) cmdSync(_ context.Context, args []string) int {
 func (a *App) syncOne(acct registry.Account) bool {
 	ok := true
 	var parts []string
+	if !a.migrateHistory(acct) {
+		ok = false
+	}
 	linked, err := links.LinkMissing(a.Paths, acct.Dir)
 	if err != nil {
 		a.warnf("%s: link shared config: %v", acct.Name, err)

@@ -67,13 +67,6 @@ func stateText(r Row) string {
 	return "api error"
 }
 
-func todayText(r Row) string {
-	if r.TodayErr != "" {
-		return "err"
-	}
-	return humanize(todayTotal(r.Today))
-}
-
 func rowLine(r Row, now time.Time, withModels bool) string {
 	var five, seven usage.Window
 	if r.Usage != nil {
@@ -91,7 +84,8 @@ func rowLine(r Row, now time.Time, withModels bool) string {
 		}
 		cols = append(cols, modelPct(opus), modelPct(sonnet))
 	}
-	cols = append(cols, todayText(r), stateText(r))
+	// Per-account token totals are meaningless: all accounts share one history.
+	cols = append(cols, "-", stateText(r))
 	for i, c := range cols {
 		if c == "" {
 			cols[i] = "-"
@@ -118,6 +112,9 @@ func allLine(c usage.Combined, now time.Time) string {
 	if len(c.Excluded) > 0 {
 		parts = append(parts, "excluded: "+strings.Join(c.Excluded, ", "))
 	}
+	if c.Today != (tokens.Tokens{}) {
+		parts = append(parts, fmt.Sprintf("today %s/%s in/out, %s cache", humanize(c.Today.Input), humanize(c.Today.Output), humanize(c.Today.CacheRead+c.Today.CacheWrite)))
+	}
 	return "ALL  " + strings.Join(parts, " · ")
 }
 
@@ -136,10 +133,10 @@ func Render(rows []Row, c usage.Combined, now time.Time) string {
 	}
 	_ = tw.Flush()
 	b.WriteString(allLine(c, now) + "\n")
+	if c.TodayErr != "" {
+		b.WriteString("⚠ token scan failed\n")
+	}
 	for _, r := range rows {
-		if r.TodayErr != "" {
-			fmt.Fprintf(&b, "⚠ %s: token scan failed\n", r.Account)
-		}
 		if r.LinkErr != "" {
 			fmt.Fprintf(&b, "⚠ %s: link check failed — run ccm doctor\n", r.Account)
 		}

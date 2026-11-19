@@ -25,6 +25,7 @@ Commands:
   <name> [claude args...]       same as run <name>
   best [claude args...]         run claude as the account with most headroom
   use <name>                    print shell code that switches account
+  continue [--from a] [--to b] [--session id]   resume this folder's latest chat on another account
   status [--json] [--watch d] [--refresh-cache]
                                 show plan usage per account (watch: default 30s)
   statusline [install|uninstall] Claude status line segment (install wraps your current one)
@@ -56,6 +57,7 @@ var commands = map[string]handler{
 	"run":        (*App).cmdRun,
 	"best":       (*App).cmdBest,
 	"use":        (*App).cmdUse,
+	"continue":   (*App).cmdContinue,
 	"status":     (*App).cmdStatus,
 	"statusline": (*App).cmdStatusline,
 	"sync":       (*App).cmdSync,

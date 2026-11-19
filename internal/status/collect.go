@@ -32,8 +32,6 @@ type Deps struct {
 // Row is one rendered account line.
 type Row struct {
 	usage.AccountUsage
-	Today        tokens.Tokens
-	TodayErr     string
 	LinkErr      string
 	LinkWarnings []string
 }
@@ -58,13 +56,6 @@ func collectOne(ctx context.Context, d Deps, a registry.Account) Row {
 	}
 	row := Row{AccountUsage: au}
 	dir := accountDir(d, a)
-	if d.Today != nil {
-		t, err := d.Today(filepath.Join(dir, projectsDirName), d.Now())
-		row.Today = t
-		if err != nil {
-			row.TodayErr = err.Error()
-		}
-	}
 	if d.Inspect != nil {
 		items, err := d.Inspect(d.Paths, dir)
 		if err != nil {
@@ -101,5 +92,20 @@ func Collect(ctx context.Context, d Deps) ([]Row, usage.Combined) {
 	for i, r := range rows {
 		list[i] = r.AccountUsage
 	}
-	return rows, usage.Aggregate(list)
+	c := usage.Aggregate(list)
+	c.Today, c.TodayErr = scanToday(d)
+	return rows, c
+}
+
+// scanToday totals today's tokens once, from main's projects dir: history is
+// shared by every account, so a per-account scan would count it repeatedly.
+func scanToday(d Deps) (tokens.Tokens, string) {
+	if d.Today == nil {
+		return tokens.Tokens{}, ""
+	}
+	t, err := d.Today(filepath.Join(d.Paths.ClaudeDir, projectsDirName), d.Now())
+	if err != nil {
+		return t, err.Error()
+	}
+	return t, ""
 }
