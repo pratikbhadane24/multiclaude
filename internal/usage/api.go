@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"time"
 
@@ -40,64 +41,74 @@ type Usage struct {
 	Extra                        *Extra
 }
 
-type rawWindow struct {
-	Utilization *float64 `json:"utilization"`
-	ResetsAt    *string  `json:"resets_at"`
-}
-
-type rawExtra struct {
-	IsEnabled   bool     `json:"is_enabled"`
-	Utilization *float64 `json:"utilization"`
-}
-
-type rawUsage struct {
-	FiveHour       *rawWindow `json:"five_hour"`
-	SevenDay       *rawWindow `json:"seven_day"`
-	SevenDayOpus   *rawWindow `json:"seven_day_opus"`
-	SevenDaySonnet *rawWindow `json:"seven_day_sonnet"`
-	Extra          *rawExtra  `json:"extra_usage"`
-}
-
-func (r *rawWindow) window() Window {
-	if r == nil {
-		return Window{}
+// decodeField decodes raw into T, returning the zero value and false when the
+// field is absent, null, or of the wrong type.
+func decodeField[T any](raw json.RawMessage) (T, bool) {
+	var v T
+	if len(raw) == 0 || json.Unmarshal(raw, &v) != nil {
+		var zero T
+		return zero, false
 	}
-	w := Window{UsedPct: r.Utilization}
-	if r.ResetsAt != nil {
-		if t, err := time.Parse(time.RFC3339Nano, *r.ResetsAt); err == nil {
+	return v, true
+}
+
+// parseWindow decodes one window; ok=false when raw is not a JSON object.
+func parseWindow(raw json.RawMessage) (Window, bool) {
+	fields, ok := decodeField[map[string]json.RawMessage](raw)
+	if !ok || fields == nil {
+		return Window{}, false
+	}
+	var w Window
+	if v, ok := decodeField[*float64](fields["utilization"]); ok {
+		w.UsedPct = v
+	}
+	if s, ok := decodeField[*string](fields["resets_at"]); ok && s != nil {
+		if t, err := time.Parse(time.RFC3339Nano, *s); err == nil {
 			w.ResetsAt = &t
 		}
 	}
-	return w
+	return w, true
 }
 
-func (r *rawWindow) optWindow() *Window {
-	if r == nil {
+func parseExtra(raw json.RawMessage) *Extra {
+	fields, ok := decodeField[map[string]json.RawMessage](raw)
+	if !ok || fields == nil {
 		return nil
 	}
-	w := r.window()
+	e := &Extra{}
+	if v, ok := decodeField[bool](fields["is_enabled"]); ok {
+		e.Enabled = v
+	}
+	if v, ok := decodeField[*float64](fields["utilization"]); ok {
+		e.UsedPct = v
+	}
+	return e
+}
+
+func optWindow(raw json.RawMessage) *Window {
+	w, ok := parseWindow(raw)
+	if !ok {
+		return nil
+	}
 	return &w
 }
 
-// Parse decodes a usage response tolerantly; it errors only for non-objects.
+// Parse decodes a usage response tolerantly: a wrongly-typed field becomes
+// nil/zero for that field only. It errors only when b is not a JSON object.
 func Parse(b []byte) (Usage, error) {
-	var raw *rawUsage
-	if err := json.Unmarshal(b, &raw); err != nil {
-		return Usage{}, fmt.Errorf("parse usage: %w", err)
-	}
-	if raw == nil {
+	top, ok := decodeField[map[string]json.RawMessage](b)
+	if !ok || top == nil {
 		return Usage{}, errors.New("parse usage: not a JSON object")
 	}
-	u := Usage{
-		FiveHour:       raw.FiveHour.window(),
-		SevenDay:       raw.SevenDay.window(),
-		SevenDayOpus:   raw.SevenDayOpus.optWindow(),
-		SevenDaySonnet: raw.SevenDaySonnet.optWindow(),
-	}
-	if raw.Extra != nil {
-		u.Extra = &Extra{Enabled: raw.Extra.IsEnabled, UsedPct: raw.Extra.Utilization}
-	}
-	return u, nil
+	fiveHour, _ := parseWindow(top["five_hour"])
+	sevenDay, _ := parseWindow(top["seven_day"])
+	return Usage{
+		FiveHour:       fiveHour,
+		SevenDay:       sevenDay,
+		SevenDayOpus:   optWindow(top["seven_day_opus"]),
+		SevenDaySonnet: optWindow(top["seven_day_sonnet"]),
+		Extra:          parseExtra(top["extra_usage"]),
+	}, nil
 }
 
 // State describes the outcome of fetching one account's usage.
@@ -165,7 +176,7 @@ func (f Fetcher) get(ctx context.Context, token string) (int, []byte, error) {
 	resp, err := f.client().Do(req)
 	if err != nil {
 		// Deliberately unwrapped: keep error text free of request details.
-		return 0, nil, errors.New("request failed")
+		return 0, nil, errors.New(transportErrText(err))
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBodyBytes))
@@ -173,6 +184,15 @@ func (f Fetcher) get(ctx context.Context, token string) (int, []byte, error) {
 		return 0, nil, errors.New("read response")
 	}
 	return resp.StatusCode, body, nil
+}
+
+// transportErrText maps a transport error to a fixed, detail-free message.
+func transportErrText(err error) string {
+	var ne net.Error
+	if errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &ne) && ne.Timeout()) {
+		return "timeout"
+	}
+	return "request failed"
 }
 
 // refreshAndRead refreshes then re-reads creds. ok=false means res is final.
@@ -207,7 +227,8 @@ func (f Fetcher) Fetch(ctx context.Context, a registry.Account) AccountUsage {
 	}
 	refreshed := false
 	ok := true
-	if creds.ExpiresAt <= f.now().UnixMilli() {
+	// ExpiresAt == 0 means unknown: do not refresh proactively (a 401 will).
+	if creds.ExpiresAt > 0 && creds.ExpiresAt <= f.now().UnixMilli() {
 		if creds, res, ok = f.refreshAndRead(ctx, a, res); !ok {
 			return res
 		}
