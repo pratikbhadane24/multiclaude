@@ -35,7 +35,7 @@ func (a *App) cmdRemove(ctx context.Context, args []string) int {
 	}
 	if *purge {
 		if err := purgeAllowed(a.Paths, acct.Dir); err != nil {
-			return a.errorf("refusing to purge: %v", err)
+			return a.errorf("refusing --purge: %v", err)
 		}
 	}
 	yes, interrupted := a.confirm(ctx, fmt.Sprintf("Remove account %q? [y/N] ", acct.Name))
@@ -83,35 +83,60 @@ func resolved(p string) string {
 	return filepath.Join(resolved(parent), filepath.Base(p))
 }
 
-// within reports whether path is dir itself or lies inside it.
-func within(dir, path string) bool {
-	rel, err := filepath.Rel(dir, path)
-	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+// sameFile reports whether a and b exist and are the same file (case- and symlink-proof).
+func sameFile(a, b string) bool {
+	ia, err := os.Stat(a)
+	if err != nil {
+		return false
+	}
+	ib, err := os.Stat(b)
+	return err == nil && os.SameFile(ia, ib)
+}
+
+// pathOrAncestorIs reports whether path or any of its ancestors is the same file as other.
+func pathOrAncestorIs(path, other string) bool {
+	for p := resolved(path); ; p = filepath.Dir(p) {
+		if sameFile(p, other) {
+			return true
+		}
+		if filepath.Dir(p) == p {
+			return false
+		}
+	}
+}
+
+// rootOverlaps reports whether the accounts root is Home, ClaudeDir, or inside ClaudeDir.
+func rootOverlaps(p paths.Paths) bool {
+	return sameFile(p.AccountsRoot, p.Home) || pathOrAncestorIs(p.AccountsRoot, p.ClaudeDir)
 }
 
 // purgeAllowed accepts only a real (non-symlink) direct child of the accounts
-// root that is neither the shim dir, the Claude dir, nor home or an ancestor of them.
+// root. Everything is compared by file identity so case variants (APFS) and
+// symlinks cannot alias the shim dir, the Claude dir, home or their ancestors.
 func purgeAllowed(p paths.Paths, dir string) error {
 	if dir == "" || !filepath.IsAbs(dir) {
 		return fmt.Errorf("account dir %q is not an absolute path", dir)
 	}
-	clean, root := filepath.Clean(dir), filepath.Clean(p.AccountsRoot)
-	if filepath.Dir(clean) != root {
-		return fmt.Errorf("%s is outside %s (must be a direct child)", clean, root)
+	if rootOverlaps(p) {
+		return fmt.Errorf("accounts root overlaps your home or ~/.claude")
 	}
-	if resolved(filepath.Dir(clean)) != resolved(root) {
-		return fmt.Errorf("%s resolves outside %s", clean, root)
+	clean := filepath.Clean(dir)
+	if !sameFile(filepath.Dir(clean), p.AccountsRoot) {
+		return fmt.Errorf("%s is outside %s (must be a direct child)", clean, p.AccountsRoot)
 	}
-	if fi, err := os.Lstat(clean); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+	fi, err := os.Lstat(clean)
+	if err != nil {
+		return nil // nothing there, nothing to delete
+	}
+	if fi.Mode()&os.ModeSymlink != 0 {
 		return fmt.Errorf("%s is a symlink", clean)
 	}
-	target := filepath.Join(resolved(filepath.Dir(clean)), filepath.Base(clean))
-	if target == resolved(filepath.Dir(p.ShimPath)) {
+	if sameFile(clean, filepath.Dir(p.ShimPath)) {
 		return fmt.Errorf("%s is the shim directory", clean)
 	}
 	for _, protected := range []string{p.ClaudeDir, p.Home} {
-		if protected != "" && within(target, resolved(protected)) {
-			return fmt.Errorf("%s contains %s", clean, protected)
+		if protected != "" && pathOrAncestorIs(protected, clean) {
+			return fmt.Errorf("%s is or contains %s", clean, protected)
 		}
 	}
 	return nil
