@@ -22,13 +22,13 @@ func (a *App) signInHint(email string) {
 
 // loginOne runs the login for one account and returns an exit code.
 func (a *App) loginOne(ctx context.Context, acct registry.Account) int {
+	if a.SelfExe == "" {
+		return a.errorf("cannot resolve ccm path; refusing to start login (it could open your default browser)")
+	}
 	a.signInHint(acct.Email)
 	mode, err := browser.ParseMode(acct.Browser)
 	if err != nil {
 		a.warnf("%s: %v; using copy", acct.Name, err)
-	}
-	if a.SelfExe == "" {
-		a.warnf("could not resolve ccm path; Claude may open your default browser")
 	}
 	// Detach from ctx so Ctrl-C reaches claude (foreground) instead of killing it mid-OAuth.
 	st, err := auth.LoginWith(context.WithoutCancel(ctx), a.Runner, a.Paths, acct, acct.Email, auth.LoginOptions{SelfExe: a.SelfExe, Mode: mode})
@@ -64,7 +64,13 @@ func (a *App) loginAll(ctx context.Context, accts []registry.Account) int {
 	code := ExitOK
 	attempted := false
 	for _, acct := range accts {
+		if ctx.Err() != nil {
+			return a.cancelled()
+		}
 		st, err := auth.GetStatus(ctx, a.Runner, a.Paths, acct)
+		if ctx.Err() != nil {
+			return a.cancelled()
+		}
 		if err != nil {
 			a.warnf("%s: status check failed", acct.Name)
 		} else if st.LoggedIn && (acct.Email == "" || strings.EqualFold(st.Email, acct.Email)) {
@@ -74,9 +80,18 @@ func (a *App) loginAll(ctx context.Context, accts []registry.Account) int {
 		if c := a.loginOne(ctx, acct); c > code {
 			code = c
 		}
+		if ctx.Err() != nil {
+			return a.cancelled()
+		}
 	}
 	if !attempted {
 		a.printf("All accounts are logged in.\n")
 	}
 	return code
+}
+
+// cancelled reports an interrupted multi-account login.
+func (a *App) cancelled() int {
+	a.printf("Cancelled.\n")
+	return ExitInterrupted
 }

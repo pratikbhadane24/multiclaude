@@ -73,7 +73,7 @@ func newCLI(t *testing.T, in string) *cliEnv {
 	}
 	e.fake = &run.Fake{Respond: e.respond}
 	e.app = &App{Paths: p, Runner: e.fake, HTTP: &http.Client{Transport: fakeTransport{e}},
-		Now: func() time.Time { return testNow }, Out: e.out, Err: e.err, In: strings.NewReader(in)}
+		Now: func() time.Time { return testNow }, Out: e.out, Err: e.err, In: strings.NewReader(in), SelfExe: "/bin/ccm"}
 	return e
 }
 

@@ -53,16 +53,63 @@ func TestAddDetachesInteractiveCallFromCancel(t *testing.T) {
 	}
 }
 
-func TestLoginWarnsWithoutSelfExe(t *testing.T) {
+func loginCalls(h *harness) int {
+	n := 0
+	for _, c := range h.fake.Calls {
+		if len(c.Args) > 1 && c.Args[1] == "login" {
+			n++
+		}
+	}
+	return n
+}
+
+func TestLoginRefusesWithoutSelfExe(t *testing.T) {
 	h := newHarness(t, "")
+	h.app.SelfExe = ""
 	_ = registry.Save(h.p, []registry.Account{{Name: "work", Dir: "/d", Email: "you@x.com"}})
-	h.emails["/d"] = "you@x.com"
 
-	h.app.Login(context.Background(), "work")
+	code := h.app.Login(context.Background(), "work")
 
-	want := "ccm: warning: could not resolve ccm path; Claude may open your default browser"
-	if !strings.Contains(h.err.String(), want) {
-		t.Fatalf("err %q", h.err)
+	want := "ccm: cannot resolve ccm path; refusing to start login (it could open your default browser)"
+	if code != ExitError || !strings.Contains(h.err.String(), want) || loginCalls(h) != 0 {
+		t.Fatalf("code %d err %q calls %v", code, h.err, h.fake.Calls)
+	}
+}
+
+func twoLoggedOut(h *harness) {
+	_ = registry.Save(h.p, []registry.Account{{Name: "a", Dir: "/a", Email: "a@x.com"}, {Name: "b", Dir: "/b", Email: "b@x.com"}})
+	h.emails["/a"], h.emails["/b"] = "a@x.com", "b@x.com"
+}
+
+func TestLoginAllPreCancelledStartsNothing(t *testing.T) {
+	h := newHarness(t, "")
+	twoLoggedOut(h)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	code := h.app.Login(ctx, "--all")
+
+	if code != ExitInterrupted || loginCalls(h) != 0 {
+		t.Fatalf("code %d logins %d", code, loginCalls(h))
+	}
+}
+
+func TestLoginAllCancelAfterFirstSkipsSecond(t *testing.T) {
+	h := newHarness(t, "")
+	twoLoggedOut(h)
+	ctx, cancel := context.WithCancel(context.Background())
+	inner := h.fake.Respond
+	h.fake.Respond = func(c run.Call) (run.Result, error) {
+		if len(c.Args) > 1 && c.Args[1] == "login" {
+			cancel() // user pressed Ctrl-C during the first login
+		}
+		return inner(c)
+	}
+
+	code := h.app.Login(ctx, "--all")
+
+	if code != ExitInterrupted || loginCalls(h) != 1 {
+		t.Fatalf("code %d logins %d", code, loginCalls(h))
 	}
 }
 

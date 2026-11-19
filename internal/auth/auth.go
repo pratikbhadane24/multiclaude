@@ -95,11 +95,6 @@ func loginEnv(a registry.Account, email string, opts LoginOptions) []string {
 	)
 }
 
-// Login runs an interactive login with claude's default browser handling.
-func Login(ctx context.Context, r run.Runner, p paths.Paths, a registry.Account, email string) (Status, error) {
-	return LoginWith(ctx, r, p, a, email, LoginOptions{})
-}
-
 // LoginWith runs an interactive login and verifies the resulting email.
 func LoginWith(ctx context.Context, r run.Runner, p paths.Paths, a registry.Account, email string, opts LoginOptions) (Status, error) {
 	args := []string{"auth", "login", "--claudeai"}
