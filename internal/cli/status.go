@@ -63,13 +63,14 @@ func (a *App) authEmail(ctx context.Context, acct registry.Account) string {
 	return st.Email
 }
 
-const statusUsage = "status [--json] [--watch d] [--refresh-cache]"
+const statusUsage = "status [--json] [--all] [--watch d] [--refresh-cache]"
 
 // cmdStatus handles `ccm status [--json] [--watch d]`.
 func (a *App) cmdStatus(ctx context.Context, args []string) int {
 	fs := a.newFlags("status")
 	jsonOut := fs.Bool("json", false, "print JSON")
 	watch := fs.Duration("watch", 0, "refresh every interval (e.g. 30s)")
+	showAll := fs.Bool("all", false, "also list accounts that share a login as separate rows")
 	refreshCache := fs.Bool("refresh-cache", false, "update the status line cache quietly")
 	if _, code, ok := a.parseArgs(fs, withWatchDefault(args), 0, statusUsage); !ok {
 		return code
@@ -87,6 +88,7 @@ func (a *App) cmdStatus(ctx context.Context, args []string) int {
 		return a.errorf("%v", err)
 	}
 	d := a.statusDeps(accts)
+	d.ShowDuplicates = *showAll
 	if watchSet {
 		return a.watchStatus(ctx, d, *watch)
 	}

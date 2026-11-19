@@ -26,6 +26,8 @@ const (
 	StatusWarn  Status = "warn"
 	StatusFail  Status = "fail"
 	StatusFixed Status = "fixed"
+	// StatusInfo is a note, not a problem: it never affects the exit code.
+	StatusInfo Status = "info"
 )
 
 const (
@@ -60,6 +62,9 @@ type Deps struct {
 	MCPSync         func(p paths.Paths, dir string) (bool, error)
 	KeychainPresent func(ctx context.Context, a registry.Account) (bool, error)
 	T3HasInstance   func(a registry.Account) (bool, error)
+	// Identity (optional) returns an account's login identity: the keychain
+	// account UUID and the email; either may be empty when unknown.
+	Identity func(ctx context.Context, a registry.Account) (uuid, email string)
 }
 
 // Run performs all checks in order. With fix=true it repairs missing and
@@ -73,7 +78,7 @@ func Run(ctx context.Context, d Deps, fix bool) []Check {
 		}
 		out = append(out, keychainCheck(ctx, d, a), t3Check(d, a))
 	}
-	return out
+	return append(out, duplicateChecks(ctx, d)...)
 }
 
 func okCheck(account, name string) Check {
@@ -281,6 +286,9 @@ func Summary(checks []Check) (int, string) {
 			problems++
 		case StatusFixed:
 			prefix = "✓ fixed "
+		case StatusInfo:
+			b.WriteString("i " + infoLabel(c) + c.Detail + "\n")
+			continue
 		default:
 			continue
 		}
@@ -299,4 +307,12 @@ func label(c Check) string {
 		return c.Name
 	}
 	return "[" + c.Account + "] " + c.Name
+}
+
+// infoLabel prefixes an info line with its account, e.g. "[admin] ".
+func infoLabel(c Check) string {
+	if c.Account == "" {
+		return ""
+	}
+	return "[" + c.Account + "] "
 }
