@@ -1,7 +1,26 @@
 // Package paths resolves filesystem locations used by ccm.
 package paths
 
-import "path/filepath"
+import (
+	"path/filepath"
+	"strings"
+
+	"golang.org/x/text/unicode/norm"
+)
+
+// Normalize expands a leading ~, makes p absolute (relative to home), cleans it,
+// applies NFC and strips any trailing slash.
+func Normalize(p, home string) string {
+	switch {
+	case p == "~":
+		p = home
+	case strings.HasPrefix(p, "~/"):
+		p = filepath.Join(home, p[2:])
+	case !filepath.IsAbs(p):
+		p = filepath.Join(home, p)
+	}
+	return norm.NFC.String(filepath.Clean(p))
+}
 
 // Paths are the resolved locations for a given home directory and environment.
 type Paths struct {
@@ -14,6 +33,7 @@ func Resolve(getenv func(string) string, home string) Paths {
 	if root == "" {
 		root = filepath.Join(home, ".claude-accounts")
 	}
+	root = Normalize(root, home)
 	real := getenv("CCM_CLAUDE_BIN")
 	if real == "" {
 		real = filepath.Join(home, ".local", "bin", "claude")

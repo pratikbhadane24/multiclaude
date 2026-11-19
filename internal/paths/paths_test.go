@@ -35,3 +35,23 @@ func TestResolveClaudeBinOverride(t *testing.T) {
 		t.Fatalf("got %+v", got)
 	}
 }
+
+func TestResolveNormalizesCCMHome(t *testing.T) {
+	got := Resolve(func(k string) string {
+		if k == "CCM_HOME" {
+			return "/x/"
+		}
+		return ""
+	}, "/h")
+	if got.AccountsRoot != "/x" {
+		t.Errorf("got %q", got.AccountsRoot)
+	}
+}
+
+func TestNormalize(t *testing.T) {
+	for in, want := range map[string]string{"~/a/": "/h/a", "x": "/h/x", "/h/é": "/h/é"} {
+		if got := Normalize(in, "/h"); got != want {
+			t.Errorf("%q: got %q", in, got)
+		}
+	}
+}
