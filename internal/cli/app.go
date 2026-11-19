@@ -29,6 +29,8 @@ type App struct {
 	Out    io.Writer
 	Err    io.Writer
 	In     io.Reader
+	// SelfExe is the ccm binary used as $BROWSER during login; empty disables link handling.
+	SelfExe string
 }
 
 func (a *App) errorf(format string, args ...any) int {
