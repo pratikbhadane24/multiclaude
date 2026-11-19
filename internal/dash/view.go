@@ -68,7 +68,8 @@ func (m Model) selectedArgs() []string {
 	if name == "" {
 		return nil
 	}
-	return m.deps.ArgsFor(name)
+	args, _ := m.deps.ArgsFor(name)
+	return args
 }
 
 // headerLines is the summary line plus, when there is anything to show, a
@@ -198,17 +199,20 @@ var helpExplain = []string{
 	styleBold.Render("Reading the screen"),
 	"  5h left 1.5/3   about 1.5 accounts' worth of 5-hour capacity is left, out of 3 accounts",
 	"  7d left         the same for the weekly (7-day) limit",
-	"  bars            how much of each window is used: green < 70%, yellow < 90%, red ≥ 90%",
+	"  bars            how much of each window is used: green normally, yellow when low, red when limited",
 	"  " + bestText + "               the best free account right now; " + styleKey.Render("b") + " launches it",
 	"  today in/out    tokens sent / received today; cache = cached tokens",
 	"",
 	styleBold.Render("States"),
 	"  ok          ready to use",
-	"  low         a window is 90% or more used; switch soon",
-	"  limited     a window is used up; wait for the reset or pick another account",
-	"  idle        logged in, no 5-hour window running yet",
+	"  idle        logged in, nothing used yet: no window is running (empty bar)",
+	"  low         a window is 95% or more used (yellow); still usable, switch soon",
+	"  limited     a window is used up (red); wait for the reset or pick another account",
 	"  logged out  press l to log in",
 	"  api error   usage could not be read; press r to retry",
+	"  = name      two accounts are signed in as the same login. By default the",
+	"              second is merged into the first (main (= admin)); press " + styleKey.Render("A") + " to list",
+	"              it as its own row, marked (= main). It is never picked as best.",
 	"",
 	"Press ? or esc to close.",
 }

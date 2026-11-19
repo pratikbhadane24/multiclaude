@@ -29,11 +29,11 @@ func TestLaunchCmdSetsConfigDirOnlyForNonMain(t *testing.T) {
 	e := newCLI(t, "")
 	t.Setenv("CLAUDE_CONFIG_DIR", "/stale")
 
-	work, err := e.app.LaunchCmd("work", nil)
+	work, _, err := e.app.LaunchCmd("work", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	main, err := e.app.LaunchCmd("main", nil)
+	main, _, err := e.app.LaunchCmd("main", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func TestLaunchCmdUsesConfigArgsThenExtra(t *testing.T) {
 	e.setConfig(t, config.Config{DefaultArgs: []string{"--model", "opus"},
 		Accounts: map[string]config.AccountConfig{"work": {Args: []string{"--verbose"}}}})
 
-	c, err := e.app.LaunchCmd("work", []string{"--resume", "s1"})
+	c, _, err := e.app.LaunchCmd("work", []string{"--resume", "s1"})
 
 	want := []string{"--model", "opus", "--verbose", "--resume", "s1"}
 	if err != nil || !reflect.DeepEqual(c.Args[1:], want) {
@@ -70,7 +70,7 @@ func TestCcmNameAndDashboardEnterLaunchIdentically(t *testing.T) {
 	if code := e.main("work"); code != ExitOK {
 		t.Fatalf("code=%d err=%s", code, e.err)
 	}
-	c, err := e.app.LaunchCmd("work", nil)
+	c, _, err := e.app.LaunchCmd("work", nil)
 
 	calls := e.callsTo(e.p.RealClaude)
 	if err != nil || len(calls) != 1 {
@@ -85,9 +85,9 @@ func TestDashArgsForUsesConfig(t *testing.T) {
 	e := newCLI(t, "")
 	e.setConfig(t, config.Config{DefaultArgs: []string{"--dangerously-skip-permissions"}})
 
-	got := e.app.dashDeps().ArgsFor("work")
+	got, err := e.app.dashDeps().ArgsFor("work")
 
-	if !reflect.DeepEqual(got, []string{"--dangerously-skip-permissions"}) {
+	if err != nil || !reflect.DeepEqual(got, []string{"--dangerously-skip-permissions"}) {
 		t.Fatalf("args=%q", got)
 	}
 }
@@ -96,7 +96,7 @@ func TestDashCollectWritesUsageCache(t *testing.T) {
 	e := newCLI(t, "")
 	e.loginWithUsage(e.workDir, usageBody("30", "10"))
 
-	e.app.dashCollect(context.Background())
+	e.app.dashCollect(context.Background(), false)
 
 	c, err := status.ReadCache(e.p)
 	if err != nil || len(c.Accounts) != 2 || c.Accounts[1].Name != "work" || !c.WrittenAt.Equal(testNow) {
@@ -107,7 +107,7 @@ func TestDashCollectWritesUsageCache(t *testing.T) {
 func TestLaunchCmdUnknownAccount(t *testing.T) {
 	e := newCLI(t, "")
 
-	if _, err := e.app.LaunchCmd("nope", nil); err == nil || !strings.Contains(err.Error(), `unknown account "nope"`) {
+	if _, _, err := e.app.LaunchCmd("nope", nil); err == nil || !strings.Contains(err.Error(), `unknown account "nope"`) {
 		t.Fatalf("err=%v", err)
 	}
 }
@@ -150,7 +150,7 @@ func TestDashWithoutTTYFails(t *testing.T) {
 func TestDashDepsCollectReturnsRegistryAccounts(t *testing.T) {
 	e := newCLI(t, "")
 
-	snap := e.app.dashDeps().Collect(context.Background())
+	snap := e.app.dashDeps().Collect(context.Background(), false)
 
 	if snap.Err != nil || len(snap.Rows) != 2 || len(snap.Accounts) != 2 || snap.Rows[1].Account != "work" {
 		t.Fatalf("snap=%+v", snap)
@@ -166,7 +166,7 @@ func TestDashCollectFeedsCombinedToday(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	snap := e.app.dashCollect(context.Background())
+	snap := e.app.dashCollect(context.Background(), false)
 
 	if snap.Today != snap.Combined.Today || snap.Today.Input != 7 || snap.Today.Output != 9 {
 		t.Fatalf("today=%+v combined=%+v err=%q", snap.Today, snap.Combined.Today, snap.TodayErr)
@@ -224,5 +224,60 @@ func TestDashDepsSelfRunsSelfExe(t *testing.T) {
 
 	if !reflect.DeepEqual(c.Args, []string{"/bin/ccm", "login", "work"}) {
 		t.Fatalf("args=%q", c.Args)
+	}
+}
+
+func writeBrokenConfig(t *testing.T, e *cliEnv) {
+	t.Helper()
+	if err := os.MkdirAll(e.p.AccountsRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(e.p.AccountsRoot, "config.json"), []byte("{nope"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLaunchCmdBrokenConfigWarnsButStillBuildsCommand(t *testing.T) {
+	e := newCLI(t, "")
+	writeBrokenConfig(t, e)
+
+	c, warning, err := e.app.LaunchCmd("work", []string{"--resume", "s1"})
+
+	if err != nil || c == nil || !strings.Contains(warning, "parse") {
+		t.Fatalf("cmd=%v warning=%q err=%v", c, warning, err)
+	}
+	if !reflect.DeepEqual(c.Args[1:], []string{"--resume", "s1"}) {
+		t.Fatalf("args=%q", c.Args)
+	}
+}
+
+func TestLaunchCmdValidConfigHasNoWarning(t *testing.T) {
+	e := newCLI(t, "")
+
+	_, warning, err := e.app.LaunchCmd("work", nil)
+
+	if err != nil || warning != "" {
+		t.Fatalf("warning=%q err=%v", warning, err)
+	}
+}
+
+func TestDashArgsForBrokenConfigReturnsError(t *testing.T) {
+	e := newCLI(t, "")
+	writeBrokenConfig(t, e)
+
+	args, err := e.app.dashArgsFor("work")
+
+	if err == nil || len(args) != 0 {
+		t.Fatalf("args=%q err=%v", args, err)
+	}
+}
+
+func TestDashCollectPassesShowDuplicates(t *testing.T) {
+	e := newCLI(t, "")
+
+	snap := e.app.dashCollect(context.Background(), true)
+
+	if snap.Err != nil {
+		t.Fatal(snap.Err)
 	}
 }

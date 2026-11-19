@@ -171,10 +171,10 @@ func TestStateLabelLowAndIdle(t *testing.T) {
 		SevenDay: usage.Window{UsedPct: pct(10), ResetsAt: at(time.Hour)},
 	}}}
 
-	if s, _ := stateLabel(low); s != "low" {
+	if s, _ := stateText(low); s != "low (5h)" {
 		t.Errorf("low: %q", s)
 	}
-	if s, _ := stateLabel(idle); s != "idle" {
+	if s, _ := stateText(idle); s != "idle" {
 		t.Errorf("idle: %q", s)
 	}
 }

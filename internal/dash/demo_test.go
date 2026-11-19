@@ -13,8 +13,8 @@ func TestDemoReplacesEverySideEffect(t *testing.T) {
 	d := Demo(newTestDeps(r))
 	ctx := context.Background()
 
-	snap := d.Collect(ctx)
-	c, err := d.Launch("main", nil)
+	snap := d.Collect(ctx, false)
+	c, _, err := d.Launch("main", nil)
 	d.Doctor(ctx)
 	_ = d.Run(ctx, "/usr/bin/osascript", nil)
 	self := d.Self("login", "work")
@@ -28,7 +28,7 @@ func TestDemoReplacesEverySideEffect(t *testing.T) {
 		t.Fatalf("real sync called: %+v", r)
 	}
 
-	if len(snap.Rows) != 4 || err != nil || c.Path != demoEcho {
+	if len(snap.Rows) != 6 || err != nil || c.Path != demoEcho {
 		t.Fatalf("rows=%d path=%q err=%v", len(snap.Rows), c.Path, err)
 	}
 	if r.collects+r.doctors+len(r.runs)+len(r.launched) != 0 {
@@ -41,12 +41,12 @@ func TestDemoViewSnapshot(t *testing.T) {
 	d := Demo(newTestDeps(&recorder{}))
 	m := New(context.Background(), d)
 	m = update(t, m, tea.WindowSizeMsg{Width: 100, Height: 30})
-	m = update(t, m, snapshotMsg{snap: d.Collect(context.Background()), at: testNow})
+	m = update(t, m, snapshotMsg{snap: d.Collect(context.Background(), false), at: testNow})
 
 	v := m.View()
 	t.Log("\n" + v)
 
-	for _, want := range []string{"limited 5h", "logged out", "★", "⚠ skip-permissions"} {
+	for _, want := range []string{"limited (5h)", "logged out", "★", "⚠ skip-permissions"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("missing %q", want)
 		}

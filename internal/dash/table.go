@@ -3,6 +3,7 @@ package dash
 import (
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 
@@ -14,13 +15,13 @@ const (
 	colGap       = "  "
 	markerWidth  = 2
 	minNameWidth = 4
-	maxNameWidth = 16
+	maxNameWidth = 24
 	maxMailWidth = 26
 	maxPlanWidth = 8
 	// barColSuffix is the room for " 100%" after a bar.
 	barColSuffix = 5
 	resetWidth   = 8
-	stateWidth   = 10
+	stateWidth   = 12
 	markerText   = "› "
 	bestText     = "★"
 )
@@ -34,10 +35,10 @@ type column struct {
 	cell  func(r status.Row, m Model) (string, lipgloss.Style)
 }
 
-func pctCell(get func(r status.Row) *float64) func(status.Row, Model) (string, lipgloss.Style) {
+func pctCell(get func(r status.Row, now time.Time) status.WindowView) func(status.Row, Model) (string, lipgloss.Style) {
 	return func(r status.Row, m Model) (string, lipgloss.Style) {
-		p := get(r)
-		return bar(p, m.barWidth()), usageStyle(p)
+		v := get(r, m.deps.Now())
+		return bar(v, m.barWidth()), windowStyle(v)
 	}
 }
 
@@ -51,20 +52,6 @@ func (m Model) barWidth() int {
 
 func emptyTokens(t tokens.Tokens) bool { return t == tokens.Tokens{} }
 
-func fiveUsed(r status.Row) *float64 {
-	if r.Usage == nil {
-		return nil
-	}
-	return r.Usage.FiveHour.UsedPct
-}
-
-func sevenUsed(r status.Row) *float64 {
-	if r.Usage == nil {
-		return nil
-	}
-	return r.Usage.SevenDay.UsedPct
-}
-
 func widest(rows []status.Row, get func(status.Row) string, lo, hi int) int {
 	w := lo
 	for _, r := range rows {
@@ -77,32 +64,42 @@ func widest(rows []status.Row, get func(status.Row) string, lo, hi int) int {
 func (m Model) columns() []column {
 	rows := m.snap.Rows
 	return []column{
-		{"NAME", widest(rows, func(r status.Row) string { return r.Account + " " + bestText }, minNameWidth, maxNameWidth), 0, nameCell},
+		{"NAME", widest(rows, func(r status.Row) string { return rowName(r) + " " + bestText }, minNameWidth, maxNameWidth), 0, nameCell},
 		{"EMAIL", widest(rows, func(r status.Row) string { return r.Email }, len("EMAIL"), maxMailWidth), 8, func(r status.Row, _ Model) (string, lipgloss.Style) {
 			return r.Email, plain
 		}},
 		{"PLAN", widest(rows, func(r status.Row) string { return r.Plan }, len("PLAN"), maxPlanWidth), 5, func(r status.Row, _ Model) (string, lipgloss.Style) {
 			return r.Plan, plain
 		}},
-		{"5H USED", m.barWidth() + barColSuffix, 1, pctCell(fiveUsed)},
-		{"7D USED", m.barWidth() + barColSuffix, 2, pctCell(sevenUsed)},
+		{"5H USED", m.barWidth() + barColSuffix, 1, pctCell(status.Window5h)},
+		{"7D USED", m.barWidth() + barColSuffix, 2, pctCell(status.Window7d)},
 		{"5H RESET", resetWidth, 4, resetCell},
-		{"STATE", stateWidth, 3, func(r status.Row, _ Model) (string, lipgloss.Style) { return stateLabel(r) }},
+		{"STATE", stateWidth, 3, func(r status.Row, _ Model) (string, lipgloss.Style) { return stateText(r) }},
 	}
 }
 
 func nameCell(r status.Row, m Model) (string, lipgloss.Style) {
 	if r.Account == m.bestName() {
-		return r.Account + " " + bestText, styleBold
+		return rowName(r) + " " + bestText, styleBold
 	}
-	return r.Account, styleBold
+	return rowName(r), styleBold
+}
+
+// rowName is the account name with its merged duplicates ("main (= admin)")
+// or, on a shown duplicate, the account it repeats ("admin (= main)").
+func rowName(r status.Row) string {
+	if r.SameAs != "" {
+		return r.Account + " (= " + r.SameAs + ")"
+	}
+	return r.DisplayName()
 }
 
 func resetCell(r status.Row, m Model) (string, lipgloss.Style) {
-	if r.Usage == nil || r.Usage.FiveHour.ResetsAt == nil {
-		return "-", styleDim
+	v := status.Window5h(r, m.deps.Now())
+	if v.Idle || v.Reset == naText {
+		return v.Reset, styleDim
 	}
-	return status.FormatDuration(r.Usage.FiveHour.ResetsAt.Sub(m.deps.Now())), plain
+	return v.Reset, plain
 }
 
 // fitColumns keeps columns in priority order until the next one would not

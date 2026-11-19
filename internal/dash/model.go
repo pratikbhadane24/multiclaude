@@ -59,6 +59,10 @@ type Model struct {
 	// collected after handoffAfter decides whether to offer a handoff.
 	handoffFrom  string
 	handoffAfter time.Time
+	// handoffReady is set once a fresh snapshot landed: the offer is then
+	// shown as soon as the list is visible, until handoffUntil.
+	handoffReady bool
+	handoffUntil time.Time
 }
 
 // New returns a dashboard model; ctx bounds in-process work.
@@ -82,12 +86,24 @@ func (m Model) Init() tea.Cmd {
 	return tea.Batch(m.collectCmd(), m.tickCmd())
 }
 
-// Update handles one message.
+// Update handles one message, then shows a pending handoff offer if the list
+// is visible.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	next, cmd := m.step(msg)
+	if nm, ok := next.(Model); ok {
+		return nm.offerHandoff(), cmd
+	}
+	return next, cmd
+}
+
+func (m Model) step(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		return m.resized(msg.Width, msg.Height), nil
 	case snapshotMsg:
+		if msg.showDuplicates != m.deps.ShowDuplicates {
+			return m, nil // collected before A was pressed; a fresh one is in flight
+		}
 		return m.withSnapshot(msg).afterSnapshot(msg)
 	case tickMsg:
 		return m.onTick()

@@ -3,13 +3,13 @@ package dash
 import (
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
 
 	"multiclaude/internal/status"
-	"multiclaude/internal/usage"
 )
 
 const (
@@ -18,8 +18,7 @@ const (
 	// wideWidth is the terminal width from which full-size bars are drawn.
 	wideWidth = 100
 	fullPct   = 100.0
-	warnPct   = 70.0
-	dangerPct = 90.0
+	idleText  = "idle"
 	barFull   = "█"
 	barEmpty  = "░"
 	naText    = "n/a"
@@ -39,58 +38,63 @@ var (
 	plain       = lipgloss.NewStyle()
 )
 
-// usageStyle colors a used percentage.
-func usageStyle(p *float64) lipgloss.Style {
+// windowStyle colors a window: red when limited, yellow when low, dim when
+// idle or unavailable, else green.
+func windowStyle(v status.WindowView) lipgloss.Style {
 	switch {
-	case p == nil:
-		return styleDim
-	case *p >= dangerPct:
+	case v.Limited:
 		return styleBad
-	case *p >= warnPct:
+	case v.Low:
 		return styleWarn
+	case v.Idle || v.Used == naText:
+		return styleDim
 	}
 	return styleOK
 }
 
-// bar renders "████░░░░ 50%" for a used percentage, w cells of bar.
-func bar(p *float64, w int) string {
-	if p == nil {
-		return strings.Repeat(barEmpty, w) + " " + naText
+// usedFraction parses the view's "42%" text; ok is false for idle or n/a.
+func usedFraction(v status.WindowView) (float64, bool) {
+	if v.Idle {
+		return 0, false
 	}
-	used := math.Min(math.Max(*p, 0), fullPct)
-	filled := int(math.Round(used / fullPct * float64(w)))
-	return strings.Repeat(barFull, filled) + strings.Repeat(barEmpty, w-filled) + " " + status.FormatPct(p)
+	p, err := strconv.ParseFloat(strings.TrimSuffix(v.Used, "%"), 64)
+	return p, err == nil
 }
 
-// stateLabel returns the short state text and its color.
-func stateLabel(r status.Row) (string, lipgloss.Style) {
-	if lim := status.LimitedWindow(r); lim != "" {
-		return "limited " + lim, styleBad
-	}
-	switch r.State {
-	case usage.StateOK, usage.StateExpiredRefreshed:
-		return okLabel(r)
-	case usage.StateLoggedOut:
-		return "logged out", styleWarn
-	}
-	return "api error", styleBad
-}
-
-// okLabel refines a usable account: low (a window ≥ 90% used), idle (no
-// 5-hour window running), else ok.
-func okLabel(r status.Row) (string, lipgloss.Style) {
-	if r.Usage == nil {
-		return "ok", styleOK
-	}
-	for _, w := range []usage.Window{r.Usage.FiveHour, r.Usage.SevenDay} {
-		if w.UsedPct != nil && *w.UsedPct >= dangerPct {
-			return "low", styleWarn
+// bar renders "████░░░░ 50%" for a window view, w cells of bar; an idle
+// window is an empty bar with "idle".
+func bar(v status.WindowView, w int) string {
+	p, ok := usedFraction(v)
+	if !ok {
+		text := v.Used
+		if v.Idle {
+			text = idleText
 		}
+		return strings.Repeat(barEmpty, w) + " " + text
 	}
-	if r.Usage.FiveHour.ResetsAt == nil {
-		return "idle", styleDim
+	used := math.Min(math.Max(p, 0), fullPct)
+	filled := int(math.Round(used / fullPct * float64(w)))
+	return strings.Repeat(barFull, filled) + strings.Repeat(barEmpty, w-filled) + " " + v.Used
+}
+
+// stateText is the short STATE cell: the shared label without its detail
+// (arrow hints, error text); an idle account says so.
+func stateText(r status.Row) (string, lipgloss.Style) {
+	label := status.StateLabel(r)
+	for _, cut := range []string{" →", ":"} {
+		label, _, _ = strings.Cut(label, cut)
 	}
-	return "ok", styleOK
+	switch {
+	case r.SameAs != "":
+		return "= " + r.SameAs, styleDim
+	case strings.HasPrefix(label, "limited"), strings.HasPrefix(label, "api error"):
+		return label, styleBad
+	case strings.HasPrefix(label, "low"), label == "logged out":
+		return label, styleWarn
+	case label == "ok" && status.Window5h(r, time.Time{}).Idle:
+		return idleText, styleDim
+	}
+	return label, styleOK
 }
 
 // age renders how long ago t was: 12s, 3m, 1h4m.

@@ -27,6 +27,13 @@ func TestRenderIdleBothWindows(t *testing.T) {
 	}
 }
 
+func TestRenderZeroUsedNoResetIsIdle(t *testing.T) {
+	got := renderWith(t, status.CacheAccount{Name: "main", State: "ok", FiveHourUsed: pct(0), SevenDayUsed: pct(0)})
+	if got != "ccm: main 5h idle · 7d idle\n" {
+		t.Fatalf("got %q", got)
+	}
+}
+
 func TestRenderErrorRowsStayBare(t *testing.T) {
 	for _, st := range []string{"api-error", "logged-out"} {
 		got := renderWith(t, status.CacheAccount{Name: "main", State: st})

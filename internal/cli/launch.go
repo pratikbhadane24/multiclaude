@@ -38,28 +38,32 @@ func (a *App) buildLaunch(acct registry.Account, extra []string) (launch, error)
 // LaunchCmd builds the command `ccm <name> [extra...]` runs, for the
 // dashboard. Stdio is left unset for tea.ExecProcess to wire. A broken config
 // cannot be printed under the dashboard, so it launches without config args
-// (as `ccm <name>` does after its warning).
-func (a *App) LaunchCmd(name string, extra []string) (*exec.Cmd, error) {
+// (as `ccm <name>` does after its warning) and returns the config error text
+// as warning for the dashboard to show.
+func (a *App) LaunchCmd(name string, extra []string) (c *exec.Cmd, warning string, err error) {
 	accts, err := registry.Load(a.Paths)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	acct, ok := registry.Find(accts, name)
 	if !ok {
-		return nil, fmt.Errorf("unknown account %q", name)
+		return nil, "", fmt.Errorf("unknown account %q", name)
 	}
-	l, _ := a.buildLaunch(acct, extra)
-	c := exec.Command(l.Bin, l.Args...)
+	l, cfgErr := a.buildLaunch(acct, extra)
+	if cfgErr != nil {
+		warning = cfgErr.Error()
+	}
+	c = exec.Command(l.Bin, l.Args...)
 	c.Env = l.Env
-	return c, nil
+	return c, warning, nil
 }
 
 // dashArgsFor is the merged launch args shown by the dashboard (details pane
-// and the skip-permissions badge); nil when the config cannot be read.
-func (a *App) dashArgsFor(name string) []string {
+// and the skip-permissions badge); the error means the config cannot be read.
+func (a *App) dashArgsFor(name string) ([]string, error) {
 	args, err := a.launchArgs(name, nil)
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	return args
+	return args, nil
 }

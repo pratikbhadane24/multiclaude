@@ -70,11 +70,11 @@ func Account(p paths.Paths, configDir string) string {
 	return filepath.Base(dir)
 }
 
-// segment renders one window. A nil window on a usable account is idle; a
+// segment renders one window. A nil window (or 0% with no reset) on a usable account is idle; a
 // window that already reset since the cache was written is unknown ("?"), not
 // the stale percentage. >=95% is marked low, >=100% limited.
 func segment(label string, used *float64, resets *time.Time, usable bool, now time.Time) string {
-	if used == nil {
+	if used == nil || (*used == 0 && resets == nil) {
 		if usable {
 			return label + " idle"
 		}

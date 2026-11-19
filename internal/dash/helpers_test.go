@@ -29,6 +29,10 @@ type recorder struct {
 	t3syncs  int
 	ticks    int
 	snap     Snapshot
+	// shows records the showDuplicates flag of every collect.
+	shows []bool
+	// launchWarn is returned as Launch's config warning.
+	launchWarn string
 }
 
 func (r *recorder) count(p *int) int {
@@ -67,17 +71,18 @@ func twoAccountSnapshot() Snapshot {
 
 func newTestDeps(r *recorder) Deps {
 	return Deps{
-		Collect: func(context.Context) Snapshot {
+		Collect: func(_ context.Context, showDuplicates bool) Snapshot {
 			r.mu.Lock()
 			defer r.mu.Unlock()
 			r.collects++
+			r.shows = append(r.shows, showDuplicates)
 			return r.snap
 		},
-		Launch: func(name string, extra []string) (*exec.Cmd, error) {
+		Launch: func(name string, extra []string) (*exec.Cmd, string, error) {
 			r.mu.Lock()
 			defer r.mu.Unlock()
 			r.launched = append(r.launched, name)
-			return exec.Command("/bin/claude-fake", append([]string{name}, extra...)...), nil
+			return exec.Command("/bin/claude-fake", append([]string{name}, extra...)...), r.launchWarn, nil
 		},
 		Self:     func(args ...string) *exec.Cmd { return exec.Command("/opt/ccm", args...) },
 		SelfPath: "/opt/ccm",
@@ -105,11 +110,11 @@ func newTestDeps(r *recorder) Deps {
 			r.t3syncs++
 			return "T3 Code already up to date.\n", nil
 		},
-		ArgsFor: func(name string) []string {
+		ArgsFor: func(name string) ([]string, error) {
 			if name == "main" {
-				return []string{"--dangerously-skip-permissions"}
+				return []string{"--dangerously-skip-permissions"}, nil
 			}
-			return nil
+			return nil, nil
 		},
 		Now: func() time.Time { return testNow },
 		Exec: func(c *exec.Cmd, fn tea.ExecCallback) tea.Cmd {
