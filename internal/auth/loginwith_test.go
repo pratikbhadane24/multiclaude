@@ -6,7 +6,9 @@ import (
 	"testing"
 
 	"multiclaude/internal/browser"
+	"multiclaude/internal/paths"
 	"multiclaude/internal/registry"
+	"multiclaude/internal/run"
 )
 
 func TestLoginWithSetsBrowserEnv(t *testing.T) {
@@ -25,7 +27,7 @@ func TestLoginWithSetsBrowserEnv(t *testing.T) {
 
 func TestLoginWithoutSelfExeLeavesBrowserAlone(t *testing.T) {
 	f := statusFake("a@x.com")
-	if _, err := Login(context.Background(), f, testPaths(t), registry.Account{Name: "main"}, ""); err != nil {
+	if _, err := loginPlain(context.Background(), f, testPaths(t), registry.Account{Name: "main"}, ""); err != nil {
 		t.Fatal(err)
 	}
 	for _, e := range f.Calls[0].Env {
@@ -33,4 +35,9 @@ func TestLoginWithoutSelfExeLeavesBrowserAlone(t *testing.T) {
 			t.Fatalf("unexpected %s", e)
 		}
 	}
+}
+
+// loginPlain runs LoginWith without any browser options.
+func loginPlain(ctx context.Context, r run.Runner, p paths.Paths, a registry.Account, email string) (Status, error) {
+	return LoginWith(ctx, r, p, a, email, LoginOptions{})
 }

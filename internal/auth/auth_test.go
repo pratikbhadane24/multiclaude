@@ -89,7 +89,7 @@ func TestGetStatusBadJSON(t *testing.T) {
 
 func TestLoginPassesEmailAndInherits(t *testing.T) {
 	f := statusFake("you@x.com")
-	st, err := Login(context.Background(), f, testPaths(t), registry.Account{Name: "work", Dir: "/d"}, "you@x.com")
+	st, err := loginPlain(context.Background(), f, testPaths(t), registry.Account{Name: "work", Dir: "/d"}, "you@x.com")
 	if err != nil || st.Email != "you@x.com" {
 		t.Fatalf("%+v %v", st, err)
 	}
@@ -100,7 +100,7 @@ func TestLoginPassesEmailAndInherits(t *testing.T) {
 }
 
 func TestLoginMismatch(t *testing.T) {
-	_, err := Login(context.Background(), statusFake("other@x.com"), testPaths(t), registry.Account{Name: "work", Dir: "/d"}, "you@x.com")
+	_, err := loginPlain(context.Background(), statusFake("other@x.com"), testPaths(t), registry.Account{Name: "work", Dir: "/d"}, "you@x.com")
 	var mm *MismatchError
 	if !errors.As(err, &mm) || mm.Want != "you@x.com" || mm.Got != "other@x.com" {
 		t.Fatalf("%v", err)
@@ -109,7 +109,7 @@ func TestLoginMismatch(t *testing.T) {
 
 func TestLoginWithoutEmailOmitsFlag(t *testing.T) {
 	f := statusFake("a@x.com")
-	if _, err := Login(context.Background(), f, testPaths(t), registry.Account{Name: "main"}, ""); err != nil {
+	if _, err := loginPlain(context.Background(), f, testPaths(t), registry.Account{Name: "main"}, ""); err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(strings.Join(f.Calls[0].Args, " "), "--email") {

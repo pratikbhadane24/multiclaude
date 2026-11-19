@@ -60,6 +60,10 @@ func (a *App) AddWith(ctx context.Context, name, email, open string) int {
 	}
 	existing, _ := registry.Find(accts, name)
 	email, err = a.resolveEmail(ctx, name, email, existing)
+	if ctx.Err() != nil {
+		a.printf("\nCancelled.\n")
+		return ExitInterrupted
+	}
 	if err != nil {
 		return a.errorf("%v", err)
 	}

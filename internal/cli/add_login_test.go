@@ -61,7 +61,7 @@ func newHarness(t *testing.T, in string) *harness {
 		}
 		return run.Result{Stdout: `{"loggedIn":true,"email":"` + h.emails[dir] + `"}`}, nil
 	}}
-	h.app = &App{Paths: p, Runner: h.fake, Out: h.out, Err: h.err, In: strings.NewReader(in)}
+	h.app = &App{Paths: p, Runner: h.fake, Out: h.out, Err: h.err, In: strings.NewReader(in), SelfExe: "/bin/ccm"}
 	return h
 }
 

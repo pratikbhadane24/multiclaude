@@ -26,6 +26,7 @@ func TestPurgeGuardStrict(t *testing.T) {
 	p := guardPaths(root)
 	mustMkdir(t, filepath.Join(p.AccountsRoot, "work", "nested"))
 	mustMkdir(t, filepath.Join(root, "victim"))
+	mustMkdir(t, filepath.Dir(p.ShimPath))
 	mustMkdir(t, p.ClaudeDir)
 	if err := os.Symlink(filepath.Join(root, "victim"), filepath.Join(p.AccountsRoot, "linked")); err != nil {
 		t.Fatal(err)
@@ -46,7 +47,8 @@ func TestPurgeGuardStrict(t *testing.T) {
 		{"direct child", p, filepath.Join(p.AccountsRoot, "work"), true},
 		{"nested refused", p, filepath.Join(p.AccountsRoot, "work", "nested"), false},
 		{"dir is symlink refused", p, filepath.Join(p.AccountsRoot, "linked"), false},
-		{"symlinked parent refused", p, filepath.Join(root, "alias", "work"), false},
+		{"parent is another dir refused", p, filepath.Join(root, "victim", "work"), false},
+		{"alias of root allowed (identity)", p, filepath.Join(root, "alias", "work"), true},
 		{"claude dir refused", p, p.ClaudeDir, false},
 		{"root==home, ~/.claude refused", homeRoot, p.ClaudeDir, false},
 		{"home itself refused", p, p.Home, false},
@@ -165,5 +167,67 @@ func TestPurgeRemoveAllFailureStillDeletesKeychainAndListsLeftovers(t *testing.T
 	}
 	if !strings.Contains(e.err.String(), e.workDir) || !strings.Contains(e.err.String(), "rm -rf") {
 		t.Fatalf("no cleanup hint: %s", e.err)
+	}
+}
+
+func isCaseInsensitive(t *testing.T, dir string) bool {
+	t.Helper()
+	probe := filepath.Join(dir, "CaseProbe")
+	mustWrite(t, probe, "x")
+	_, err := os.Stat(filepath.Join(dir, "caseprobe"))
+	return err == nil
+}
+
+func TestPurgeGuardCaseVariantsAreIdentityChecked(t *testing.T) {
+	root := t.TempDir()
+	if !isCaseInsensitive(t, root) {
+		t.Skip("case-sensitive filesystem")
+	}
+	p := guardPaths(root)
+	p.ClaudeDir = filepath.Join(p.AccountsRoot, ".claude")
+	mustMkdir(t, p.ClaudeDir)
+	mustMkdir(t, filepath.Dir(p.ShimPath))
+	homeRoot := guardPaths(root)
+	homeRoot.AccountsRoot = homeRoot.Home // CCM_HOME=$HOME
+	mustMkdir(t, homeRoot.ClaudeDir)
+
+	if err := purgeAllowed(p, filepath.Join(p.AccountsRoot, ".CLAUDE")); err == nil {
+		t.Error(".CLAUDE variant of ClaudeDir allowed")
+	}
+	if err := purgeAllowed(p, filepath.Join(p.AccountsRoot, "BIN")); err == nil {
+		t.Error("BIN variant of shim dir allowed")
+	}
+	if err := purgeAllowed(homeRoot, filepath.Join(homeRoot.Home, ".CLAUDE")); err == nil {
+		t.Error("root==Home with ~/.CLAUDE allowed")
+	}
+}
+
+func TestPurgeRefusedWhenRootOverlapsHomeOrClaudeDir(t *testing.T) {
+	root := t.TempDir()
+	p := guardPaths(root)
+	mustMkdir(t, p.ClaudeDir)
+	for name, accounts := range map[string]string{"home": p.Home, "claude dir": p.ClaudeDir, "inside claude dir": filepath.Join(p.ClaudeDir, "accts")} {
+		mustMkdir(t, accounts)
+		q := p
+		q.AccountsRoot = accounts
+		err := purgeAllowed(q, filepath.Join(accounts, "work"))
+		if err == nil || !strings.Contains(err.Error(), "accounts root overlaps your home or ~/.claude") {
+			t.Errorf("%s: err=%v", name, err)
+		}
+	}
+}
+
+func TestAddEmailPromptInterruptedExits130(t *testing.T) {
+	e := newCLI(t, "")
+	pr, pw := io.Pipe()
+	defer pw.Close()
+	e.app.In = pr
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() { time.Sleep(50 * time.Millisecond); cancel() }()
+
+	code := e.app.Main(ctx, []string{"add", "fresh"})
+
+	if code != ExitInterrupted || !strings.Contains(e.out.String(), "Cancelled.") {
+		t.Fatalf("code=%d out=%s err=%s", code, e.out, e.err)
 	}
 }
