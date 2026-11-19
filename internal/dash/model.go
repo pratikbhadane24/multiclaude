@@ -48,6 +48,9 @@ type Model struct {
 
 	input   textinput.Model
 	addName string
+
+	// running holds in-flight background jobs (doctor, sync, t3-sync).
+	running map[string]bool
 }
 
 // New returns a dashboard model; ctx bounds in-process work.
@@ -55,8 +58,10 @@ func New(ctx context.Context, d Deps) Model {
 	in := textinput.New()
 	in.Width = inputWidth
 	return Model{
-		ctx:    ctx,
-		deps:   withDefaults(d),
+		ctx:     ctx,
+		deps:    withDefaults(d),
+		loading: true, // Init starts the first collection
+
 		width:  defaultWidth,
 		height: defaultHeight,
 		input:  in,
@@ -81,9 +86,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case execDoneMsg:
 		return m.onExecDone(msg)
 	case doctorMsg:
-		return m.withDoctor(msg.checks), nil
+		return m.withJob(jobDoctor, false).withDoctor(msg.checks), nil
 	case toastMsg:
-		return m.withToast(msg.text), nil
+		return m.withJob(msg.job, false).withToast(msg.text), nil
 	case tea.KeyMsg:
 		return m.onKey(msg)
 	}
@@ -96,7 +101,7 @@ func (m Model) forward(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m.mode {
 	case modeAddName, modeAddEmail:
 		m.input, cmd = m.input.Update(msg)
-	case modeDoctor:
+	case modeDoctor, modeHelp:
 		m.pane, cmd = m.pane.Update(msg)
 	}
 	return m, cmd
@@ -118,8 +123,13 @@ func (m Model) withToast(text string) Model {
 }
 
 func (m Model) withSnapshot(msg snapshotMsg) Model {
+	m.loading = false
+	if msg.snap.Err != nil && m.loaded {
+		// Keep the last good rows; just say what went wrong.
+		return m.withToast("refresh failed: " + msg.snap.Err.Error())
+	}
 	name := m.selectedName()
-	m.snap, m.loaded, m.loading, m.lastRefresh = msg.snap, true, false, msg.at
+	m.snap, m.loaded, m.lastRefresh = msg.snap, true, msg.at
 	m.selected = 0
 	for i, r := range m.snap.Rows {
 		if r.Account == name {
@@ -166,4 +176,22 @@ func (m Model) selectedName() string {
 		return ""
 	}
 	return m.snap.Rows[m.selected].Account
+}
+
+// withJob returns m with job marked running or finished (copying the set).
+func (m Model) withJob(job string, on bool) Model {
+	if job == "" {
+		return m
+	}
+	next := make(map[string]bool, len(m.running)+1)
+	for k, v := range m.running {
+		next[k] = v
+	}
+	if on {
+		next[job] = true
+	} else {
+		delete(next, job)
+	}
+	m.running = next
+	return m
 }

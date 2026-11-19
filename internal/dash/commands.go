@@ -87,7 +87,7 @@ func (m Model) textCmd(label string, fn func(ctx context.Context) (string, error
 		if err != nil {
 			text = label + " failed: " + err.Error() + " " + oneLine(out)
 		}
-		return toastMsg{text: strings.TrimSpace(text)}
+		return toastMsg{job: label, text: strings.TrimSpace(text)}
 	}
 }
 

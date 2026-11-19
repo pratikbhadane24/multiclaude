@@ -17,6 +17,16 @@ func TestDemoReplacesEverySideEffect(t *testing.T) {
 	c, err := d.Launch("main")
 	d.Doctor(ctx)
 	_ = d.Run(ctx, "/usr/bin/osascript", nil)
+	self := d.Self("login", "work")
+	syncOut, syncErr := d.Sync(ctx)
+	t3Out, t3Err := d.T3Sync(ctx)
+
+	if self.Path != demoEcho || syncErr != nil || t3Err != nil || syncOut == "" || t3Out == "" {
+		t.Fatalf("self=%q sync=%q/%v t3=%q/%v", self.Path, syncOut, syncErr, t3Out, t3Err)
+	}
+	if r.syncs+r.t3syncs != 0 {
+		t.Fatalf("real sync called: %+v", r)
+	}
 
 	if len(snap.Rows) != 4 || err != nil || c.Path != demoEcho {
 		t.Fatalf("rows=%d path=%q err=%v", len(snap.Rows), c.Path, err)

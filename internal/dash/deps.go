@@ -12,6 +12,7 @@ import (
 	"multiclaude/internal/doctor"
 	"multiclaude/internal/registry"
 	"multiclaude/internal/status"
+	"multiclaude/internal/tokens"
 	"multiclaude/internal/usage"
 )
 
@@ -24,6 +25,10 @@ type Snapshot struct {
 	Combined usage.Combined
 	Accounts []registry.Account
 	Err      error
+	// Today is the combined token use today across accounts (shared history);
+	// zero hides it from the header.
+	Today    tokens.Tokens
+	TodayErr string
 }
 
 // Deps are the dashboard's injected collaborators.
@@ -73,6 +78,13 @@ func withDefaults(d Deps) Deps {
 	return d
 }
 
+// Background job names (one of each may run at a time).
+const (
+	jobDoctor = "doctor"
+	jobSync   = "sync"
+	jobT3Sync = "t3-sync"
+)
+
 // Messages.
 type (
 	snapshotMsg struct {
@@ -85,5 +97,5 @@ type (
 		err   error
 	}
 	doctorMsg struct{ checks []doctor.Check }
-	toastMsg  struct{ text string }
+	toastMsg  struct{ job, text string }
 )

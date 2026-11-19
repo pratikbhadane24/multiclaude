@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/term"
 
 	"multiclaude/internal/auth"
 	dashboard "multiclaude/internal/dash"
@@ -33,8 +34,7 @@ func isTerminal(v any) bool {
 	if !ok || f == nil {
 		return false
 	}
-	info, err := f.Stat()
-	return err == nil && info.Mode()&os.ModeCharDevice != 0
+	return term.IsTerminal(f.Fd())
 }
 
 func (a *App) hasTTY() bool { return isTerminal(a.In) && isTerminal(a.Out) }
@@ -55,7 +55,7 @@ func (a *App) cmdDash(ctx context.Context, args []string) int {
 		deps = dashboard.Demo(deps)
 	}
 	p := tea.NewProgram(dashboard.New(ctx, deps), tea.WithAltScreen(), tea.WithInput(a.In), tea.WithOutput(a.Out))
-	if _, err := p.Run(); err != nil && !errors.Is(err, tea.ErrProgramKilled) {
+	if _, err := p.Run(); err != nil && !errors.Is(err, tea.ErrProgramKilled) && !errors.Is(err, tea.ErrInterrupted) {
 		return a.errorf("dash: %v", err)
 	}
 	return ExitOK

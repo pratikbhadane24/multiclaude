@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"os"
 	"reflect"
 	"slices"
 	"strings"
@@ -69,6 +70,25 @@ func TestBareCcmWithoutTTYPrintsUsage(t *testing.T) {
 	e := newCLI(t, "")
 
 	if code := e.main(); code != ExitUsage || !strings.Contains(e.err.String(), "dash") {
+		t.Fatalf("code=%d err=%s", code, e.err)
+	}
+}
+
+func TestBareCcmWithDevNullIsNotATerminal(t *testing.T) {
+	e := newCLI(t, "")
+	in, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer in.Close()
+	out, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer out.Close()
+	e.app.In, e.app.Out = in, out
+
+	if code := e.main(); code != ExitUsage || !strings.Contains(e.err.String(), "Usage:") {
 		t.Fatalf("code=%d err=%s", code, e.err)
 	}
 }

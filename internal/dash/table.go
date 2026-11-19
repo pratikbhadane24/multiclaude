@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"multiclaude/internal/status"
+	"multiclaude/internal/tokens"
 )
 
 const (
@@ -16,7 +17,8 @@ const (
 	maxNameWidth = 16
 	maxMailWidth = 26
 	maxPlanWidth = 8
-	barColWidth  = barWidth + 5
+	// barColSuffix is the room for " 100%" after a bar.
+	barColSuffix = 5
 	resetWidth   = 8
 	todayWidth   = 13
 	cacheWidth   = 6
@@ -35,11 +37,21 @@ type column struct {
 }
 
 func pctCell(get func(r status.Row) *float64) func(status.Row, Model) (string, lipgloss.Style) {
-	return func(r status.Row, _ Model) (string, lipgloss.Style) {
+	return func(r status.Row, m Model) (string, lipgloss.Style) {
 		p := get(r)
-		return bar(p), usageStyle(p)
+		return bar(p, m.barWidth()), usageStyle(p)
 	}
 }
+
+// barWidth narrows the bars on small terminals so TODAY still fits.
+func (m Model) barWidth() int {
+	if m.width < wideWidth {
+		return narrowBarWidth
+	}
+	return barWidth
+}
+
+func emptyTokens(t tokens.Tokens) bool { return t == tokens.Tokens{} }
 
 func fiveUsed(r status.Row) *float64 {
 	if r.Usage == nil {
@@ -74,8 +86,8 @@ func (m Model) columns() []column {
 		{"PLAN", widest(rows, func(r status.Row) string { return r.Plan }, len("PLAN"), maxPlanWidth), 5, func(r status.Row, _ Model) (string, lipgloss.Style) {
 			return r.Plan, plain
 		}},
-		{"5H USED", barColWidth, 1, pctCell(fiveUsed)},
-		{"7D USED", barColWidth, 2, pctCell(sevenUsed)},
+		{"5H USED", m.barWidth() + barColSuffix, 1, pctCell(fiveUsed)},
+		{"7D USED", m.barWidth() + barColSuffix, 2, pctCell(sevenUsed)},
 		{"5H RESET", resetWidth, 4, resetCell},
 		{"TODAY IN/OUT", todayWidth, 6, todayCell},
 		{"CACHE", cacheWidth, 7, cacheCell},
@@ -101,12 +113,18 @@ func todayCell(r status.Row, _ Model) (string, lipgloss.Style) {
 	if r.TodayErr != "" {
 		return "err", styleBad
 	}
+	if emptyTokens(r.Today) {
+		return "-", styleDim
+	}
 	return status.FormatTokens(r.Today.Input) + "/" + status.FormatTokens(r.Today.Output), plain
 }
 
 func cacheCell(r status.Row, _ Model) (string, lipgloss.Style) {
 	if r.TodayErr != "" {
 		return "err", styleBad
+	}
+	if emptyTokens(r.Today) {
+		return "-", styleDim
 	}
 	return status.FormatTokens(r.Today.CacheRead + r.Today.CacheWrite), styleDim
 }

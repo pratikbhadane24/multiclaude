@@ -25,7 +25,7 @@ func (m Model) View() string {
 	var body []string
 	switch {
 	case m.mode == modeHelp:
-		body = m.helpLines()
+		body = []string{styleHeader.Render("Help") + styleDim.Render(sep+"↑↓ scroll · esc close"), "", m.pane.View()}
 	case m.mode == modeDoctor:
 		body = []string{styleHeader.Render("Doctor") + styleDim.Render(sep+"↑↓ scroll · esc close"), "", m.pane.View()}
 	case !m.loaded:
@@ -39,7 +39,7 @@ func (m Model) View() string {
 }
 
 func (m Model) mainLines() []string {
-	lines := []string{m.headerLine(), ""}
+	lines := append(m.headerLines(), "")
 	lines = append(lines, m.tableLines()...)
 	lines = append(lines, "")
 	lines = append(lines, m.detailLines()...)
@@ -71,7 +71,9 @@ func (m Model) selectedArgs() []string {
 	return m.deps.ArgsFor(name)
 }
 
-func (m Model) headerLine() string {
+// headerLines is the summary line plus, when there is anything to show, a
+// second line with today's combined tokens and the selected account's badge.
+func (m Model) headerLines() []string {
 	c := m.snap.Combined
 	parts := []string{
 		styleHeader.Render("ccm"),
@@ -85,13 +87,31 @@ func (m Model) headerLine() string {
 	if m.loading {
 		parts = append(parts, styleDim.Render("refreshing…"))
 	}
-	head := strings.Join(parts, sep)
-	if !slices.Contains(m.selectedArgs(), skipPermsArg) {
-		return head
+	var extra []string
+	if t := m.todayHeader(); t != "" {
+		extra = append(extra, t)
 	}
-	badge := styleBadge.Render(badgeText)
-	room := m.width - lipgloss.Width(badge) - len(colGap)
-	return clip(head, max(room, 0)) + colGap + badge
+	if slices.Contains(m.selectedArgs(), skipPermsArg) {
+		extra = append(extra, styleBadge.Render(badgeText))
+	}
+	lines := []string{strings.Join(parts, sep)}
+	if len(extra) > 0 {
+		lines = append(lines, strings.Join(extra, colGap))
+	}
+	return lines
+}
+
+// todayHeader is the combined today usage, or "" when none was provided.
+func (m Model) todayHeader() string {
+	if m.snap.TodayErr != "" {
+		return "today " + styleBad.Render("err")
+	}
+	t := m.snap.Today
+	if emptyTokens(t) {
+		return ""
+	}
+	return "today " + status.FormatTokens(t.Input) + "/" + status.FormatTokens(t.Output) +
+		" cache " + status.FormatTokens(t.CacheRead+t.CacheWrite)
 }
 
 func leftText(left float64, counted int) string {
@@ -138,7 +158,7 @@ func (m Model) footerLines() []string {
 	for _, k := range keyHelp {
 		hints = append(hints, styleKey.Render(k.key)+" "+k.label)
 	}
-	if m.mode == modeDoctor {
+	if m.mode == modeDoctor || m.mode == modeHelp {
 		hints = []string{styleKey.Render("↑↓") + " scroll", styleKey.Render("esc") + " close"}
 	}
 	var lines []string
@@ -165,9 +185,27 @@ func (m Model) helpLines() []string {
 	for _, k := range keyHelp {
 		lines = append(lines, "  "+styleKey.Render(pad(k.key, 4))+k.help)
 	}
-	return append(lines, "",
-		"Bars show how much of each plan window is used (green < 70%, yellow < 90%, red ≥ 90%).",
-		bestText+" marks the account "+styleKey.Render("b")+" would pick. Press ? or esc to close.")
+	return append(append(lines, ""), helpExplain...)
+}
+
+// helpExplain explains the numbers and states in plain language.
+var helpExplain = []string{
+	styleBold.Render("Reading the screen"),
+	"  5h left 1.5/3   about 1.5 accounts' worth of 5-hour capacity is left, out of 3 accounts",
+	"  7d left         the same for the weekly (7-day) limit",
+	"  bars            how much of each window is used: green < 70%, yellow < 90%, red ≥ 90%",
+	"  " + bestText + "               the best free account right now; " + styleKey.Render("b") + " launches it",
+	"  today in/out    tokens sent / received today; cache = cached tokens",
+	"",
+	styleBold.Render("States"),
+	"  ok          ready to use",
+	"  low         a window is 90% or more used; switch soon",
+	"  limited     a window is used up; wait for the reset or pick another account",
+	"  idle        logged in, no 5-hour window running yet",
+	"  logged out  press l to log in",
+	"  api error   usage could not be read; press r to retry",
+	"",
+	"Press ? or esc to close.",
 }
 
 // bestName is the account `b` would launch, or "".

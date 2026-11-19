@@ -9,6 +9,8 @@ import (
 	"multiclaude/internal/registry"
 )
 
+const noAccountText = "no account yet — press a to add one"
+
 // keyHelp lists every key in footer order: key, short label, help text.
 var keyHelp = []struct{ key, label, help string }{
 	{"↑↓", "select", "move the selection (also j / k)"},
@@ -51,6 +53,8 @@ func (m Model) onListKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.selected = max(min(m.selected+1, len(m.snap.Rows)-1), 0)
 	case "?":
 		m.mode = modeHelp
+		m.pane.SetContent(strings.Join(m.helpLines(), "\n"))
+		m.pane.GotoTop()
 	case "r":
 		next, cmd := m.refresh()
 		return next.withToast("refreshing…"), cmd
@@ -59,11 +63,11 @@ func (m Model) onListKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "a":
 		return m.startAdd()
 	case "d":
-		return m.withToast("running doctor…"), m.doctorCmd()
+		return m.startJob(jobDoctor, "running doctor…", m.doctorCmd())
 	case "s":
-		return m.withToast("syncing…"), m.textCmd("sync", m.deps.Sync)
+		return m.startJob(jobSync, "syncing…", m.textCmd(jobSync, m.deps.Sync))
 	case "t":
-		return m.withToast("updating T3 Code…"), m.textCmd("t3-sync", m.deps.T3Sync)
+		return m.startJob(jobT3Sync, "updating T3 Code…", m.textCmd(jobT3Sync, m.deps.T3Sync))
 	default:
 		return m.onAccountKey(k.String())
 	}
@@ -72,9 +76,12 @@ func (m Model) onListKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // onAccountKey handles keys that act on the selected account.
 func (m Model) onAccountKey(k string) (tea.Model, tea.Cmd) {
-	name := m.selectedName()
-	if name == "" || (k != "enter" && k != "n" && k != "l") {
+	if k != "enter" && k != "n" && k != "l" {
 		return m, nil
+	}
+	name := m.selectedName()
+	if name == "" {
+		return m.withToast(noAccountText), nil
 	}
 	switch k {
 	case "enter":
@@ -85,12 +92,23 @@ func (m Model) onAccountKey(k string) (tea.Model, tea.Cmd) {
 	return m.withToast("logging in " + name + "…"), m.execCmd(m.deps.Self("login", name), "login "+name)
 }
 
+// startJob runs a background job unless the same job is still running.
+func (m Model) startJob(job, toast string, cmd tea.Cmd) (tea.Model, tea.Cmd) {
+	if m.running[job] {
+		return m.withToast(job + " is already running…"), nil
+	}
+	return m.withJob(job, true).withToast(toast), cmd
+}
+
 func (m Model) onHelpKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch k.String() {
 	case "?", "esc", "q", "enter":
 		m.mode = modeList
+		return m, nil
 	}
-	return m, nil
+	var cmd tea.Cmd
+	m.pane, cmd = m.pane.Update(k)
+	return m, cmd
 }
 
 func (m Model) onDoctorKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
