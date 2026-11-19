@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"multiclaude/internal/doctor"
+	"multiclaude/internal/history"
 	"multiclaude/internal/keychain"
 	"multiclaude/internal/links"
 	"multiclaude/internal/mcp"
@@ -41,6 +42,7 @@ func (a *App) doctorDeps(accts []registry.Account) doctor.Deps {
 		Inspect:      links.Inspect,
 		LinkMissing:  links.LinkMissing,
 		FixReplaced:  links.FixReplaced,
+		MergeHistory: history.MergeIntoMain,
 		MCPDrift:     mcp.Drift,
 		MCPSync:      mcp.Sync,
 		KeychainPresent: func(ctx context.Context, acct registry.Account) (bool, error) {

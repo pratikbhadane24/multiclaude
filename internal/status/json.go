@@ -24,12 +24,6 @@ type jsonRow struct {
 	SevenOpus    *jsonWindow `json:"seven_day_opus"`
 	SevenSonnet  *jsonWindow `json:"seven_day_sonnet"`
 	Limited      bool        `json:"limited"`
-	TodayTokens  int64       `json:"today_tokens"`
-	Input        int64       `json:"today_input"`
-	Output       int64       `json:"today_output"`
-	CacheRead    int64       `json:"today_cache_read"`
-	CacheWrite   int64       `json:"today_cache_write"`
-	TodayError   string      `json:"today_error,omitempty"`
 	LinkWarnings []string    `json:"link_warnings"`
 	LinkErr      string      `json:"link_error,omitempty"`
 }
@@ -41,6 +35,13 @@ type jsonCombined struct {
 	Excluded     []string   `json:"excluded"`
 	AvailableNow int        `json:"available_now"`
 	NextResetAt  *time.Time `json:"next_reset_at"`
+	// Today is counted once: history is shared by every account.
+	TodayTokens int64  `json:"today_tokens"`
+	Input       int64  `json:"today_input"`
+	Output      int64  `json:"today_output"`
+	CacheRead   int64  `json:"today_cache_read"`
+	CacheWrite  int64  `json:"today_cache_write"`
+	TodayError  string `json:"today_error,omitempty"`
 }
 
 func toJSONWindow(w *usage.Window) *jsonWindow {
@@ -53,8 +54,7 @@ func toJSONWindow(w *usage.Window) *jsonWindow {
 func toJSONRow(r Row) jsonRow {
 	jr := jsonRow{
 		Account: r.Account, Email: r.Email, Plan: r.Plan, State: string(r.State), Error: r.Err,
-		TodayTokens: todayTotal(r.Today), Input: r.Today.Input, Output: r.Today.Output,
-		CacheRead: r.Today.CacheRead, CacheWrite: r.Today.CacheWrite, TodayError: r.TodayErr, LinkErr: r.LinkErr,
+		LinkErr:      r.LinkErr,
 		LinkWarnings: append([]string{}, r.LinkWarnings...),
 	}
 	if r.Usage != nil {
@@ -76,7 +76,12 @@ func RenderJSON(rows []Row, c usage.Combined) ([]byte, error) {
 	for i, r := range rows {
 		out.Accounts[i] = toJSONRow(r)
 	}
-	out.Combined = jsonCombined{c.FiveHourLeft, c.SevenDayLeft, c.Counted, append([]string{}, c.Excluded...), c.AvailableNow, c.NextResetAt}
+	out.Combined = jsonCombined{
+		FiveHourLeft: c.FiveHourLeft, SevenDayLeft: c.SevenDayLeft, Counted: c.Counted,
+		Excluded: append([]string{}, c.Excluded...), AvailableNow: c.AvailableNow, NextResetAt: c.NextResetAt,
+		TodayTokens: todayTotal(c.Today), Input: c.Today.Input, Output: c.Today.Output,
+		CacheRead: c.Today.CacheRead, CacheWrite: c.Today.CacheWrite, TodayError: c.TodayErr,
+	}
 	b, err := json.Marshal(out)
 	if err != nil {
 		return nil, fmt.Errorf("encode status json: %w", err)

@@ -47,6 +47,7 @@ t3 up
 | `ccm run <name> [claude args]` / `ccm <name> [claude args]` | Run `claude` as that account (`main` uses the default config). Exit code is the child's. |
 | `ccm best [claude args]` | Run on the account with the most headroom (lowest max of 5h and 7d use); prints the pick to stderr. Exit 2 if every account is limited. |
 | `ccm use <name>` | Print shell code that switches the current shell to the account (needs the `shell-init` wrapper). Sets `CCM_ACCOUNT`. |
+| `ccm continue [--from a] [--to b] [--session id]` | Resume this folder's latest conversation on another account (history is shared). `--from` defaults to `$CCM_ACCOUNT`, else the most limited account; `--to` to the account with most headroom. Exit 2 if none is free, 1 if there is no conversation. |
 | `ccm shell-init zsh` | Print the zsh wrapper and PATH line for `~/.zshrc`. Only `zsh` is supported. |
 | `ccm status [--json] [--watch [d]]` | Per-account table: `ACCOUNT EMAIL PLAN 5H USED/LEFT/RESET 7D USED/LEFT/RESET TODAY TOK STATE`, plus a combined `ALL` row. Adds `7D OPUS` and `7D SONNET` (used %) columns when the API reports those windows. `STATE` shows `limited (5h)` or `limited (7d)` when a window is at 100%. `--json` adds `seven_day_opus`, `seven_day_sonnet` and `limited` per account. `--watch` refreshes (default `30s`, or a duration like `10s`). `--json` and `--watch` cannot be combined. |
 | `ccm sync` | Re-link new shared items from `~/.claude` and copy MCP servers into every account. |
@@ -94,21 +95,22 @@ Account names are `[a-z0-9-]{1,32}` and cannot be a reserved name: `main add log
   state.json               which MCP servers came from main
   bin/claude               native Go shim `ccm-shim` (syncs MCP, then execs the real claude)
   <name>/                  CLAUDE_CONFIG_DIR for that account
-    .claude.json  projects/  history.jsonl  sessions/   per account
+    .claude.json  history.jsonl  sessions/   per account
     CLAUDE.md settings.json rules/ skills/ plugins/ agents/ commands/ hooks/ ...
+    projects/ file-history/ todos/ plans/   (conversation history)
                            symlinks to ~/.claude/<same>
 ```
 
 - **Isolation:** each account runs with its own `CLAUDE_CONFIG_DIR`. Claude Code stores that account's OAuth token in the Keychain under `Claude Code-credentials-<first 8 hex of sha256(config dir)>`. `main` (no variable set) uses plain `Claude Code-credentials`. Logins never overwrite each other and running sessions never change account.
-- **Shared (via symlinks, edit once in `~/.claude`):** CLAUDE.md, settings.json, rules, skills, plugins, agents, commands, hooks, output-styles, keybindings.
+- **Shared (via symlinks, edit once in `~/.claude`):** CLAUDE.md, settings.json, rules, skills, plugins, agents, commands, hooks, output-styles, keybindings, and conversation history (`projects`, `file-history`, `todos`, `plans`), so any account can `/resume` any chat. An account that already has its own history dirs is merged into `~/.claude` by `ccm sync`/`add`/`doctor --fix`: missing entries are moved, identical files dropped, differing ones kept as `<name>.from-<account>-<unix>`; nothing is overwritten or deleted. `history.jsonl`, `sessions/`, `session-env/` and `.claude.json` stay per account.
 - **Shared (via the shim):** user-scope MCP servers. They live in `.claude.json`, which is per account, so symlinks cannot carry them. Every launch goes through `~/.claude-accounts/bin/claude`, which merges main's `mcpServers` into the account's file (main wins on name clashes, account-only servers are kept), then execs the real `claude`. `ccm`, the zsh wrapper and T3 all use the shim. A sync failure (or an internal error in it) never blocks launch. If an account's `.claude.json` is a symlink, the MCP sync replaces it with a regular file.
-- **Per account:** login, `.claude.json` (onboarding, project trust), transcripts and auto-memory under `projects/`, history, sessions.
+- **Per account:** login, `.claude.json` (onboarding, project trust), prompt history, sessions. Auto-memory lives under the now-shared `projects/`.
 - **Usage:** `ccm status` reads each account's token from the Keychain and queries the usage endpoint. Expired tokens are refreshed only by running the official `claude auth status` for that account.
 - **T3 Code:** `ccm t3-sync` adds `claude-<account>` instances (driver `claudeAgent`, `binaryPath` = the shim, `homePath` = the account dir) and leaves other entries alone.
 
 ## Safety
 
-- Never writes `~/.claude` or `~/.claude.json`. Main is only read.
+- Never writes `~/.claude` or `~/.claude.json`, with one user-approved exception: the history migration (`sync`/`add`/`doctor --fix`) moves an account's own `projects`, `file-history`, `todos` and `plans` entries into the shared copy there. It never overwrites or deletes differing data.
 - Existing files are backed up before change: T3 settings become `settings.json.ccm-backup-<unix>`; replaced links become `<file>.ccm-backup-<unix>`. Backups are never deleted.
 - Nothing is changed automatically when a link has been replaced by a file: `ccm doctor` shows it, `doctor --fix` backs up and re-links.
 - Tokens stay in the macOS Keychain (read with `/usr/bin/security`) and in memory. They are never logged, printed, written to files, or included in `--json`. They are sent only to `api.anthropic.com`.
@@ -121,7 +123,7 @@ Account names are `[a-z0-9-]{1,32}` and cannot be a reserved name: `main add log
 - **MCP secrets are duplicated.** Secrets in MCP `env`/`headers` end up in each account's `.claude.json`, written with mode `0600` (same protection as the original).
 - **Remote OAuth MCP servers authorize once per account.** Their OAuth tokens are not copied; authorize each in every account.
 - **Symlink saves.** Experiment (`docs/experiments/symlink-save.md`, Claude Code 2.1.328): `claude plugin marketplace add/install/disable` wrote `settings.json` and `plugins/` through the symlinks and left them intact. The interactive `/config` save path is unverified until the live run (`docs/e2e-checklist.md`). `ccm doctor` detects a replaced link either way.
-- Per-account memory and history are deliberately not shared.
+- Conversation history is shared across accounts, so `status` shows TODAY tokens once (in the ALL line), not per account. `ccm continue` resumes this folder's latest chat on another account (`--resume <id>`).
 - Moving a running session between accounts is not supported.
 
 ## Uninstall

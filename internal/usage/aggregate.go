@@ -1,6 +1,10 @@
 package usage
 
-import "time"
+import (
+	"time"
+
+	"multiclaude/internal/tokens"
+)
 
 const fullPct = 100.0
 
@@ -11,6 +15,10 @@ type Combined struct {
 	Excluded                   []string
 	AvailableNow               int
 	NextResetAt                *time.Time
+	// Today is today's token use. Conversation history is shared by every
+	// account, so it is counted once here, not per account. Set by status.Collect.
+	Today    tokens.Tokens
+	TodayErr string
 }
 
 func countable(s State) bool { return s == StateOK || s == StateExpiredRefreshed }

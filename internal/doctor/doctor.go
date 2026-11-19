@@ -7,9 +7,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
+	"multiclaude/internal/consts"
+	"multiclaude/internal/history"
 	"multiclaude/internal/links"
 	"multiclaude/internal/paths"
 	"multiclaude/internal/registry"
@@ -41,15 +44,18 @@ type Check struct {
 
 // Deps holds every side effect doctor needs.
 type Deps struct {
-	Paths           paths.Paths
-	Accounts        []registry.Account
-	Now             func() time.Time
-	Stat            func(string) (os.FileInfo, error)
-	EvalSymlinks    func(string) (string, error)
-	LookPath        func(string) (string, error)
-	Inspect         func(p paths.Paths, dir string) ([]links.Item, error)
-	LinkMissing     func(p paths.Paths, dir string) ([]string, error)
-	FixReplaced     func(p paths.Paths, dir, item string, now time.Time) (links.FixResult, error)
+	Paths        paths.Paths
+	Accounts     []registry.Account
+	Now          func() time.Time
+	Stat         func(string) (os.FileInfo, error)
+	EvalSymlinks func(string) (string, error)
+	LookPath     func(string) (string, error)
+	Inspect      func(p paths.Paths, dir string) ([]links.Item, error)
+	LinkMissing  func(p paths.Paths, dir string) ([]string, error)
+	FixReplaced  func(p paths.Paths, dir, item string, now time.Time) (links.FixResult, error)
+	// MergeHistory (optional) migrates a replaced history item into main
+	// instead of FixReplaced's backup-and-relink.
+	MergeHistory    func(p paths.Paths, dir, item string, now time.Time) (history.MergeResult, error)
 	MCPDrift        func(p paths.Paths, dir string) (bool, error)
 	MCPSync         func(p paths.Paths, dir string) (bool, error)
 	KeychainPresent func(ctx context.Context, a registry.Account) (bool, error)
@@ -167,6 +173,9 @@ func replacedCheck(d Deps, a registry.Account, item string, fix bool) Check {
 	if !fix {
 		return c
 	}
+	if d.MergeHistory != nil && slices.Contains(consts.HistoryItems, item) {
+		return mergeHistoryCheck(d, a, item, c)
+	}
 	res, err := d.FixReplaced(d.Paths, a.Dir, item, d.Now())
 	if err != nil {
 		c.Detail = fmt.Sprintf("%s is no longer shared; fix failed: %v", item, err)
@@ -177,6 +186,17 @@ func replacedCheck(d Deps, a registry.Account, item string, fix bool) Check {
 	if res.BackupPath != "" {
 		c.Detail += ", backup: " + res.BackupPath
 	}
+	return c
+}
+
+func mergeHistoryCheck(d Deps, a registry.Account, item string, c Check) Check {
+	res, err := d.MergeHistory(d.Paths, a.Dir, item, d.Now())
+	if err != nil {
+		c.Detail = fmt.Sprintf("%s is no longer shared; merge failed: %v", item, err)
+		return c
+	}
+	c.Status = StatusFixed
+	c.Detail = fmt.Sprintf("%s merged into shared history (%d chats moved, %d conflicts kept as *.from-%s-*)", item, res.Moved, res.Conflicts, a.Name)
 	return c
 }
 

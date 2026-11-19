@@ -50,9 +50,6 @@ func TestCollectConcurrentOrderedAndWarnings(t *testing.T) {
 			mu.Lock()
 			dirs = append(dirs, dir)
 			mu.Unlock()
-			if strings.Contains(dir, "/d/b") {
-				return tokens.Tokens{}, context.DeadlineExceeded
-			}
 			return tokens.Tokens{Input: 1, Output: 2}, nil
 		},
 		Inspect: func(_ paths.Paths, dir string) ([]links.Item, error) {
@@ -78,32 +75,30 @@ func TestCollectConcurrentOrderedAndWarnings(t *testing.T) {
 	if rows[2].LinkErr != "boom" || rows[1].LinkErr != "" {
 		t.Fatalf("link err %+v", rows)
 	}
-	if rows[2].TodayErr == "" || rows[0].Today.Input != 1 {
-		t.Fatalf("today %+v", rows)
+	if c.Today != (tokens.Tokens{Input: 1, Output: 2}) || c.TodayErr != "" {
+		t.Fatalf("today %+v err=%q", c.Today, c.TodayErr)
 	}
-	found := map[string]bool{}
-	for _, x := range dirs {
-		found[x] = true
-	}
-	if !found["/home/.claude/projects"] || !found["/d/a/projects"] {
-		t.Fatalf("dirs %v", dirs)
+	if len(dirs) != 1 || dirs[0] != "/home/.claude/projects" {
+		t.Fatalf("tokens must be scanned once, from main's projects: %v", dirs)
 	}
 }
 
 func TestRender(t *testing.T) {
 	reset := now.Add(72 * time.Minute)
 	rows := []Row{
-		{AccountUsage: ok("a", f(40), f(10), nil), Today: tokens.Tokens{Input: 1_000_000, Output: 200_000}, LinkWarnings: []string{"rules"}},
-		{AccountUsage: ok("b", f(100), f(50), &reset), Today: tokens.Tokens{Input: 34_500}},
+		{AccountUsage: ok("a", f(40), f(10), nil), LinkWarnings: []string{"rules"}},
+		{AccountUsage: ok("b", f(100), f(50), &reset)},
 		{AccountUsage: usage.AccountUsage{Account: "x", State: usage.StateLoggedOut}},
 	}
 	c := usage.Aggregate([]usage.AccountUsage{rows[0].AccountUsage, rows[1].AccountUsage, rows[2].AccountUsage})
+	c.Today = tokens.Tokens{Input: 1_000_000, Output: 34_500, CacheRead: 2_000_000}
 	out := Render(rows, c, now)
 	for _, want := range []string{
-		"ACCOUNT", "TODAY TOK", "5H USED", "7D RESET", "40%", "60%", "100%", "0%", "1.2M", "34.5k", "1h12m", "n/a",
+		"ACCOUNT", "TODAY TOK", "5H USED", "7D RESET", "40%", "60%", "100%", "0%", "1h12m", "n/a",
 		"logged out → ccm login x",
 		"ALL  5h left 0.6/2 acct (30%) · 7d left 1.4/2 (70%) · available now 1 · next reset in 1h12m · excluded: x",
 		"⚠ a: rules is no longer shared — run ccm doctor",
+		"· today 1.0M/34.5k in/out, 2.0M cache",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in:\n%s", want, out)
@@ -125,7 +120,7 @@ func TestFormatDuration(t *testing.T) {
 }
 
 func TestRenderJSONNoSecrets(t *testing.T) {
-	rows := []Row{{AccountUsage: ok("a", f(1), nil, nil), Today: tokens.Tokens{Input: 5}}}
+	rows := []Row{{AccountUsage: ok("a", f(1), nil, nil)}}
 	b, err := RenderJSON(rows, usage.Aggregate([]usage.AccountUsage{rows[0].AccountUsage}))
 	if err != nil || !json.Valid(b) {
 		t.Fatalf("%v %s", err, b)
@@ -184,14 +179,19 @@ func TestWatcherRetriesErrorsAfterTenMinutes(t *testing.T) {
 }
 
 func TestRenderErrors(t *testing.T) {
-	rows := []Row{{AccountUsage: ok("a", f(1), f(1), nil), TodayErr: "x", LinkErr: "y"}}
-	out := Render(rows, usage.Aggregate([]usage.AccountUsage{rows[0].AccountUsage}), now)
-	for _, want := range []string{"err", "⚠ a: token scan failed", "⚠ a: link check failed — run ccm doctor"} {
+	rows := []Row{{AccountUsage: ok("a", f(1), f(1), nil), LinkErr: "y"}}
+	c := usage.Aggregate([]usage.AccountUsage{rows[0].AccountUsage})
+	c.TodayErr = "x"
+	out := Render(rows, c, now)
+	for _, want := range []string{"⚠ token scan failed", "⚠ a: link check failed — run ccm doctor"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in:\n%s", want, out)
 		}
 	}
-	b, _ := RenderJSON(rows, usage.Combined{})
+	b, _ := RenderJSON(rows, c)
+	if !strings.Contains(string(b), `"today_error":"x"`) || strings.Contains(string(b), `"today_input"`) == false {
+		t.Fatalf("%s", b)
+	}
 	if !strings.Contains(string(b), `"link_error":"y"`) {
 		t.Fatalf("%s", b)
 	}
@@ -215,7 +215,7 @@ func TestCollectNilTodayInspect(t *testing.T) {
 		},
 	}
 	rows, _ := Collect(context.Background(), d)
-	if len(rows) != 1 || rows[0].Account != "a" || rows[0].Email != "e@x" || rows[0].LinkWarnings != nil || rows[0].TodayErr != "" {
+	if len(rows) != 1 || rows[0].Account != "a" || rows[0].Email != "e@x" || rows[0].LinkWarnings != nil {
 		t.Fatalf("%+v", rows)
 	}
 }

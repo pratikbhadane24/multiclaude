@@ -22,6 +22,7 @@ Commands:
   <name> [claude args...]       same as run <name>
   best [claude args...]         run claude as the account with most headroom
   use <name>                    print shell code that switches account
+  continue [--from a] [--to b] [--session id]   resume this folder's latest chat on another account
   status [--json] [--watch d]   show plan usage per account (watch: default 30s)
   sync                          link shared config and sync MCP servers
   t3-sync                       add every account to T3 Code (and sync launch args)
@@ -51,6 +52,7 @@ var commands = map[string]handler{
 	"run":        (*App).cmdRun,
 	"best":       (*App).cmdBest,
 	"use":        (*App).cmdUse,
+	"continue":   (*App).cmdContinue,
 	"status":     (*App).cmdStatus,
 	"sync":       (*App).cmdSync,
 	"t3-sync":    (*App).cmdT3Sync,
