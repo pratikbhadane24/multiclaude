@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"multiclaude/internal/auth"
+	"multiclaude/internal/browser"
 	"multiclaude/internal/links"
 	"multiclaude/internal/mcp"
 	"multiclaude/internal/registry"
@@ -41,6 +42,15 @@ func emailOwner(accts []registry.Account, name, email string) (string, bool) {
 
 // Add creates (or resumes) an account, links shared config, syncs MCP and logs in.
 func (a *App) Add(ctx context.Context, name, email string) int {
+	return a.AddWith(ctx, name, email, "")
+}
+
+// AddWith is Add with an optional login browser mode ("" keeps the existing one).
+func (a *App) AddWith(ctx context.Context, name, email, open string) int {
+	mode, err := browser.ParseMode(open)
+	if err != nil {
+		return a.errorf("%v", err)
+	}
 	if err := registry.ValidateName(name); err != nil {
 		return a.errorf("%v", err)
 	}
@@ -58,6 +68,9 @@ func (a *App) Add(ctx context.Context, name, email string) int {
 	}
 	dir := registry.NormalizeDir(filepath.Join(a.Paths.AccountsRoot, name), a.Paths.Home)
 	acct := registry.Account{Name: name, Dir: dir, Email: email, Browser: existing.Browser}
+	if open != "" {
+		acct.Browser = mode.String()
+	}
 	if code := a.setupAccount(acct, accts); code != ExitOK {
 		return code
 	}

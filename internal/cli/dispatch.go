@@ -15,8 +15,8 @@ const ExitUsage = 64
 const usageText = `Usage: ccm <command> [args]
 
 Commands:
-  add <name> [--email e]        create an account and log it in
-  login <name> | --all          log in one account, or every logged-out one
+  add <name> [--email e] [--open mode]   create an account and log it in
+  login <name> [--open mode] | --all    log in one account, or every logged-out one
   list                          list accounts and their login state
   run <name> [claude args...]   run claude as an account
   <name> [claude args...]       same as run <name>
@@ -30,6 +30,12 @@ Commands:
   shell-init zsh                print shell integration for ~/.zshrc
   install                       install the shim and the ccm link
   help                          show this help
+
+Login link (--open copy|incognito|chrome:<Profile dir>):
+  copy (default)   the link is copied to the clipboard; the default browser is never auto-opened
+  incognito        open the link in a Google Chrome incognito window
+  chrome:<dir>     open the link in that Chrome profile directory (e.g. "Profile 2")
+  The chosen mode is remembered for the account.
 `
 
 type handler func(a *App, ctx context.Context, args []string) int

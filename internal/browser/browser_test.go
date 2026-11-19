@@ -47,6 +47,7 @@ func TestIsOpenURLInvocation(t *testing.T) {
 	}{
 		{[]string{"https://claude.ai/x"}, acct, true},
 		{[]string{"https://claude.ai/x"}, none, false},
+		{[]string{"HTTPS://claude.ai/x"}, acct, true},
 		{[]string{"http://claude.ai/x"}, acct, false},
 		{[]string{"status"}, acct, false},
 		{nil, acct, false},
