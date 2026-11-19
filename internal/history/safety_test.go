@@ -173,6 +173,27 @@ func TestLiveSessionDetection(t *testing.T) {
 	}
 }
 
+func TestLiveReasonNamesTrigger(t *testing.T) {
+	e := newEnv(t)
+	fakeProbe(t, true)
+	writeSession(t, e, "123.json", time.Hour)
+	if got, want := LiveReason(e.acc, now), "pid 123 (sessions/123.json)"; got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+
+	e = newEnv(t)
+	fakeProbe(t, false)
+	writeSession(t, e, "abc.json", time.Minute)
+	if got, want := LiveReason(e.acc, now), "recently modified sessions/abc.json"; got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+
+	e = newEnv(t)
+	if got := LiveReason(e.acc, now); got != "" {
+		t.Fatalf("got %q", got)
+	}
+}
+
 func TestLiveSessionPidFromJSONBody(t *testing.T) {
 	e := newEnv(t)
 	fakeProbe(t, true)

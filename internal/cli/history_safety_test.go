@@ -41,14 +41,15 @@ func TestSyncSkipsAccountWithRunningSession(t *testing.T) {
 	e := newCLI(t, "")
 	mustWrite(t, filepath.Join(e.p.ClaudeDir, "projects", "-p", "m.jsonl"), "m\n")
 	mustWrite(t, filepath.Join(e.workDir, "projects", "-q", "a.jsonl"), "a\n")
-	mustWrite(t, filepath.Join(e.workDir, "sessions", strconv.Itoa(os.Getpid())+".json"), "{}")
+	pid := strconv.Itoa(os.Getpid())
+	mustWrite(t, filepath.Join(e.workDir, "sessions", pid+".json"), "{}")
 
 	code := e.main("sync")
 
 	if code != ExitOK {
 		t.Fatalf("code=%d err=%s", code, e.err)
 	}
-	if !strings.Contains(e.err.String(), "ccm: warning: work has a running Claude session; close it and run ccm sync to share its history") {
+	if !strings.Contains(e.err.String(), "ccm: warning: work has a running Claude session (pid "+pid+" (sessions/"+pid+".json)); close it and run ccm sync to share its history") {
 		t.Fatalf("err=%s", e.err)
 	}
 	if fi, err := os.Lstat(filepath.Join(e.workDir, "projects")); err != nil || !fi.IsDir() {

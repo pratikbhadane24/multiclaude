@@ -26,8 +26,8 @@ func (a *App) migrateHistory(acct registry.Account) bool {
 	if !history.NeedsMerge(acct.Dir) {
 		return true
 	}
-	if history.HasLiveSession(acct.Dir, a.nowOrReal()) {
-		a.warnf("%s has a running Claude session; close it and run ccm sync to share its history", acct.Name)
+	if why := history.LiveReason(acct.Dir, a.nowOrReal()); why != "" {
+		a.warnf("%s has a running Claude session (%s); close it and run ccm sync to share its history", acct.Name, why)
 		return true
 	}
 	ok := true
@@ -51,8 +51,8 @@ func (a *App) migrateHistory(acct registry.Account) bool {
 // guardedMerge is the doctor --fix merge: same as MergeIntoMain, but refuses
 // while the account has a running Claude session.
 func (a *App) guardedMerge(p paths.Paths, dir, item string, now time.Time) (history.MergeResult, error) {
-	if history.HasLiveSession(dir, now) {
-		return history.MergeResult{}, fmt.Errorf("account has a running Claude session; close it and retry")
+	if why := history.LiveReason(dir, now); why != "" {
+		return history.MergeResult{}, fmt.Errorf("account has a running Claude session (%s); close it and retry", why)
 	}
 	return history.MergeIntoMain(p, dir, item, now)
 }
