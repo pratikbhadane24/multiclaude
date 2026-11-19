@@ -31,6 +31,7 @@ type Deps struct {
 	Exec    func(argv0 string, argv []string, env []string) error // syscall.Exec in prod
 	Stderr  io.Writer
 	Inspect func(p paths.Paths, dir string) ([]links.Item, error)
+	Self    func() (string, error) // os.Executable in prod; nil skips that check
 }
 
 // Main runs the shim. args excludes the program name; env is passed to the
@@ -40,7 +41,7 @@ func Main(args []string, env []string, deps Deps) error {
 	if dir, ok := accountDir(env, p); ok {
 		prepareAccount(p, dir, deps)
 	}
-	if err := checkNotSelf(p); err != nil {
+	if err := checkNotSelf(p, deps.Self); err != nil {
 		return err
 	}
 	argv := append([]string{claudeArgv0}, args...)
@@ -104,19 +105,24 @@ func warn(w io.Writer, format string, a ...any) {
 	_, _ = fmt.Fprintf(w, warnPrefix+format+"\n", a...)
 }
 
-// checkNotSelf refuses to exec when RealClaude resolves to the shim, which
-// would loop forever. A missing shim file cannot be the target, so it passes.
-func checkNotSelf(p paths.Paths) error {
+// checkNotSelf refuses to exec when RealClaude resolves to the installed shim
+// or to the running executable, which would loop forever. Candidates that
+// cannot be resolved (e.g. no shim installed) cannot be the target, so pass.
+func checkNotSelf(p paths.Paths, self func() (string, error)) error {
 	real, err := filepath.EvalSymlinks(p.RealClaude)
 	if err != nil {
 		return fmt.Errorf("resolve real claude %s: %w", p.RealClaude, err)
 	}
-	self, err := filepath.EvalSymlinks(p.ShimPath)
-	if err != nil {
-		return nil
+	candidates := []string{p.ShimPath}
+	if self != nil {
+		if exe, err := self(); err == nil {
+			candidates = append(candidates, exe)
+		}
 	}
-	if real == self {
-		return ErrSelfExec
+	for _, c := range candidates {
+		if resolved, err := filepath.EvalSymlinks(c); err == nil && resolved == real {
+			return ErrSelfExec
+		}
 	}
 	return nil
 }

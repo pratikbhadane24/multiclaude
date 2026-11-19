@@ -187,6 +187,32 @@ func TestMainRefusesWhenRealClaudeIsTheShim(t *testing.T) {
 	}
 }
 
+func TestMainRefusesWhenRealClaudeIsTheRunningExecutable(t *testing.T) {
+	f := newFixture(t)
+	d := f.deps()
+	d.Self = func() (string, error) { return f.p.RealClaude, nil }
+
+	err := Main(nil, nil, d)
+
+	if !errors.Is(err, ErrSelfExec) {
+		t.Fatalf("err = %v, want ErrSelfExec", err)
+	}
+	if len(f.calls) != 0 {
+		t.Fatal("exec called")
+	}
+}
+
+func TestMainRunsWhenExecutableDiffersFromRealClaude(t *testing.T) {
+	f := newFixture(t)
+	d := f.deps()
+	d.Self = func() (string, error) { return f.p.ShimPath, nil }
+
+	if err := Main(nil, nil, d); err != nil {
+		t.Fatal(err)
+	}
+	f.assertExec(t, nil, nil)
+}
+
 func TestMainReturnsExecError(t *testing.T) {
 	f := newFixture(t)
 	d := f.deps()

@@ -27,6 +27,7 @@ func main() {
 		Exec:    syscall.Exec,
 		Stderr:  os.Stderr,
 		Inspect: links.Inspect,
+		Self:    os.Executable,
 	}
 	err = shim.Main(os.Args[1:], os.Environ(), deps)
 	if err == nil {
