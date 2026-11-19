@@ -124,6 +124,9 @@ func TestAddResumeNoDuplicate(t *testing.T) {
 	if len(accts) != 2 {
 		t.Fatalf("registry: %+v", accts)
 	}
+	if h.loginCalls() != 1 {
+		t.Fatalf("logins %d, want 1", h.loginCalls())
+	}
 }
 
 func TestAddPromptsForEmail(t *testing.T) {
@@ -201,6 +204,85 @@ func TestLoginAllNothingToDo(t *testing.T) {
 	}
 	if !strings.Contains(h.out.String(), "All accounts are logged in.") || h.loginCalls() != 0 {
 		t.Fatalf("out %s", h.out)
+	}
+}
+
+func TestAddAfterMismatchDoesNotReportSuccess(t *testing.T) {
+	h := newHarness(t, "")
+	dir := filepath.Join(h.p.AccountsRoot, "work")
+	h.emails[dir] = "other@x.com"
+	if code := h.app.Add(context.Background(), "work", "you@x.com"); code != 2 {
+		t.Fatalf("first code %d", code)
+	}
+	if code := h.app.Add(context.Background(), "work", ""); code != 2 {
+		t.Fatalf("second code %d out %s", code, h.out)
+	}
+	if h.loginCalls() != 2 {
+		t.Fatalf("logins %d", h.loginCalls())
+	}
+	if !strings.Contains(h.err.String(), "other@x.com") {
+		t.Fatalf("mismatch not on stderr: %s", h.err)
+	}
+}
+
+func TestLoginAllRelogsMismatchedEmail(t *testing.T) {
+	h := newHarness(t, "")
+	dir := filepath.Join(h.p.AccountsRoot, "a")
+	h.emails[dir] = "other@x.com"
+	h.loggedIn[dir] = true
+	acct := registry.Account{Name: "a", Dir: dir, Email: "a@x.com"}
+	if err := registry.Save(h.p, []registry.Account{{Name: "main"}, acct}); err != nil {
+		t.Fatal(err)
+	}
+	h.loggedIn[""] = true
+	if code := h.app.Login(context.Background(), "--all"); code != 2 {
+		t.Fatalf("code %d", code)
+	}
+	if h.loginCalls() != 1 {
+		t.Fatalf("logins %d", h.loginCalls())
+	}
+}
+
+func TestLoginAllWarnsOnStatusFailure(t *testing.T) {
+	h := newHarness(t, "")
+	h.fake.Respond = func(c run.Call) (run.Result, error) {
+		if c.Args[1] == "status" {
+			return run.Result{Stdout: "garbage"}, nil
+		}
+		return run.Result{}, nil
+	}
+	h.app.Login(context.Background(), "--all")
+	if !strings.Contains(h.err.String(), "ccm: warning: main: status check failed") {
+		t.Fatalf("err: %s", h.err)
+	}
+}
+
+func TestAddWarnsOnMCPSyncFailureAndContinues(t *testing.T) {
+	h := newHarness(t, "")
+	if err := os.WriteFile(h.p.ClaudeJSON, []byte("{not json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h.emails[filepath.Join(h.p.AccountsRoot, "work")] = "you@x.com"
+	if code := h.app.Add(context.Background(), "work", "you@x.com"); code != 0 {
+		t.Fatalf("code %d", code)
+	}
+	if !strings.Contains(h.err.String(), "ccm: warning: mcp sync") || h.loginCalls() != 1 {
+		t.Fatalf("err %s logins %d", h.err, h.loginCalls())
+	}
+}
+
+func TestAddWithPreexistingDir(t *testing.T) {
+	h := newHarness(t, "")
+	dir := filepath.Join(h.p.AccountsRoot, "work")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	h.emails[dir] = "you@x.com"
+	if code := h.app.Add(context.Background(), "work", "you@x.com"); code != 0 {
+		t.Fatalf("code %d err %s", code, h.err)
+	}
+	if _, err := os.Lstat(filepath.Join(dir, "CLAUDE.md")); err != nil {
+		t.Fatalf("link missing: %v", err)
 	}
 }
 

@@ -3,6 +3,8 @@ package cli
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 
 	"multiclaude/internal/auth"
 	"multiclaude/internal/registry"
@@ -23,7 +25,7 @@ func (a *App) loginOne(ctx context.Context, acct registry.Account) int {
 	st, err := auth.Login(ctx, a.Runner, a.Paths, acct, acct.Email)
 	var mm *auth.MismatchError
 	if errors.As(err, &mm) {
-		a.printf("Signed in as %s but account %q expects %s. Run `ccm login %s` again using the right Claude account.\n", mm.Got, acct.Name, mm.Want, acct.Name)
+		fmt.Fprintf(a.Err, "ccm: signed in as %s but account %q expects %s. Run `ccm login %s` again using the right Claude account.\n", mm.Got, acct.Name, mm.Want, acct.Name)
 		return ExitMismatch
 	}
 	if err != nil {
@@ -54,7 +56,9 @@ func (a *App) loginAll(ctx context.Context, accts []registry.Account) int {
 	attempted := false
 	for _, acct := range accts {
 		st, err := auth.GetStatus(ctx, a.Runner, a.Paths, acct)
-		if err == nil && st.LoggedIn {
+		if err != nil {
+			a.warnf("%s: status check failed", acct.Name)
+		} else if st.LoggedIn && (acct.Email == "" || strings.EqualFold(st.Email, acct.Email)) {
 			continue
 		}
 		attempted = true

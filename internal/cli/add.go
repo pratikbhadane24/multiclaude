@@ -62,7 +62,7 @@ func (a *App) Add(ctx context.Context, name, email string) int {
 		return code
 	}
 	if existing.Email != "" {
-		if st, err := auth.GetStatus(ctx, a.Runner, a.Paths, acct); err == nil && st.LoggedIn {
+		if st, err := auth.GetStatus(ctx, a.Runner, a.Paths, acct); err == nil && st.LoggedIn && strings.EqualFold(st.Email, acct.Email) {
 			a.printf("Account %q is already logged in as %s.\n", name, st.Email)
 			return ExitOK
 		}
