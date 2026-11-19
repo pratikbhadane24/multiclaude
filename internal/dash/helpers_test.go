@@ -73,11 +73,11 @@ func newTestDeps(r *recorder) Deps {
 			r.collects++
 			return r.snap
 		},
-		Launch: func(name string) (*exec.Cmd, error) {
+		Launch: func(name string, extra []string) (*exec.Cmd, error) {
 			r.mu.Lock()
 			defer r.mu.Unlock()
 			r.launched = append(r.launched, name)
-			return exec.Command("/bin/claude-fake", name), nil
+			return exec.Command("/bin/claude-fake", append([]string{name}, extra...)...), nil
 		},
 		Self:     func(args ...string) *exec.Cmd { return exec.Command("/opt/ccm", args...) },
 		SelfPath: "/opt/ccm",

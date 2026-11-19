@@ -48,7 +48,7 @@ func (m Model) execCmd(c *exec.Cmd, label string) tea.Cmd {
 }
 
 func (m Model) launch(name string) (Model, tea.Cmd) {
-	c, err := m.deps.Launch(name)
+	c, err := m.deps.Launch(name, nil)
 	if err != nil {
 		return m.withToast(fmt.Sprintf("launch %s: %v", name, err)), nil
 	}

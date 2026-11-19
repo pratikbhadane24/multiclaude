@@ -20,7 +20,7 @@ func Demo(d Deps) Deps {
 	d = withDefaults(d)
 	now := d.Now
 	d.Collect = func(context.Context) Snapshot { return demoSnapshot(now()) }
-	d.Launch = func(name string) (*exec.Cmd, error) {
+	d.Launch = func(name string, _ []string) (*exec.Cmd, error) {
 		return exec.Command(demoEcho, "demo: would run claude as", name), nil
 	}
 	d.Self = func(args ...string) *exec.Cmd {

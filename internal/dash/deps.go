@@ -29,14 +29,20 @@ type Snapshot struct {
 	// zero hides it from the header.
 	Today    tokens.Tokens
 	TodayErr string
+	// CacheErr is a failed write of the status line's usage cache.
+	CacheErr error
 }
 
 // Deps are the dashboard's injected collaborators.
 type Deps struct {
 	// Collect gathers usage for every registered account.
 	Collect func(ctx context.Context) Snapshot
-	// Launch builds the command `ccm <name>` would run (claude as that account).
-	Launch func(name string) (*exec.Cmd, error)
+	// Launch builds the command `ccm <name> [extra...]` would run (claude as
+	// that account, config args first).
+	Launch func(name string, extra []string) (*exec.Cmd, error)
+	// LatestSession returns the newest conversation id for the current folder
+	// (shared history), as `ccm continue` finds it.
+	LatestSession func() (string, error)
 	// Self builds a command that runs this ccm binary with args.
 	Self func(args ...string) *exec.Cmd
 	// SelfPath is the absolute ccm path used for new Terminal windows.

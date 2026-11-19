@@ -1,0 +1,65 @@
+package cli
+
+import (
+	"fmt"
+	"os"
+	"os/exec"
+
+	"multiclaude/internal/auth"
+	"multiclaude/internal/config"
+	"multiclaude/internal/registry"
+)
+
+// launch is one interactive claude launch: binary, args (without argv[0]) and env.
+type launch struct {
+	Bin  string
+	Args []string
+	Env  []string
+}
+
+// launchArgs merges the configured default and per-account args before
+// extra. A broken config is returned as an error alongside extra alone, so
+// the caller can still launch.
+func (a *App) launchArgs(name string, extra []string) ([]string, error) {
+	cfg, err := config.Load(a.Paths)
+	if err != nil {
+		return config.MergedArgs(config.Config{}, name, extra), err
+	}
+	return config.MergedArgs(cfg, name, extra), nil
+}
+
+// buildLaunch is the single launch builder used by `ccm <name>`, run, best,
+// continue and the dashboard, so they always produce the same argv and env.
+func (a *App) buildLaunch(acct registry.Account, extra []string) (launch, error) {
+	args, err := a.launchArgs(acct.Name, extra)
+	return launch{Bin: auth.Binary(a.Paths), Args: args, Env: auth.Env(acct, os.Environ())}, err
+}
+
+// LaunchCmd builds the command `ccm <name> [extra...]` runs, for the
+// dashboard. Stdio is left unset for tea.ExecProcess to wire. A broken config
+// cannot be printed under the dashboard, so it launches without config args
+// (as `ccm <name>` does after its warning).
+func (a *App) LaunchCmd(name string, extra []string) (*exec.Cmd, error) {
+	accts, err := registry.Load(a.Paths)
+	if err != nil {
+		return nil, err
+	}
+	acct, ok := registry.Find(accts, name)
+	if !ok {
+		return nil, fmt.Errorf("unknown account %q", name)
+	}
+	l, _ := a.buildLaunch(acct, extra)
+	c := exec.Command(l.Bin, l.Args...)
+	c.Env = l.Env
+	return c, nil
+}
+
+// dashArgsFor is the merged launch args shown by the dashboard (details pane
+// and the skip-permissions badge); nil when the config cannot be read.
+func (a *App) dashArgsFor(name string) []string {
+	args, err := a.launchArgs(name, nil)
+	if err != nil {
+		return nil
+	}
+	return args
+}

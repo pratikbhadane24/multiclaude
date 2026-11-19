@@ -136,6 +136,9 @@ func (m Model) withSnapshot(msg snapshotMsg) Model {
 			m.selected = i
 		}
 	}
+	if msg.snap.CacheErr != nil {
+		return m.withToast("usage cache: " + msg.snap.CacheErr.Error())
+	}
 	return m
 }
 
