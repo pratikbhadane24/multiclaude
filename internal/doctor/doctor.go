@@ -195,6 +195,10 @@ func mergeHistoryCheck(d Deps, a registry.Account, item string, c Check) Check {
 		c.Detail = fmt.Sprintf("%s is no longer shared; merge failed: %v", item, err)
 		return c
 	}
+	if !res.Linked {
+		c.Detail = item + " is no longer shared; merge did not link it (nothing to merge)"
+		return c
+	}
 	c.Status = StatusFixed
 	c.Detail = fmt.Sprintf("%s merged into shared history (%d chats moved, %d conflicts kept as *.from-%s-*)", item, res.Moved, res.Conflicts, a.Name)
 	return c

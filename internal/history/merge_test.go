@@ -136,7 +136,7 @@ func TestMergeConflictingFileKeptWithSuffix(t *testing.T) {
 	if read(t, e.main("p", "x.jsonl")) != "main\n" {
 		t.Fatal("main file overwritten")
 	}
-	kept := e.main("p", "x.jsonl.from-inbox1-1700000000")
+	kept := e.main("p", "x.from-inbox1-1700000000.jsonl")
 	if read(t, kept) != "account\n" {
 		t.Fatalf("conflict copy missing at %s", kept)
 	}
@@ -144,17 +144,18 @@ func TestMergeConflictingFileKeptWithSuffix(t *testing.T) {
 
 func TestMergeNestedDirsMergeChildren(t *testing.T) {
 	e := newEnv(t)
-	write(t, e.main("p", "a", "old.jsonl"), "old\n")
-	write(t, e.account("p", "a", "new.jsonl"), "new\n")
-	write(t, e.account("p", "a", "old.jsonl"), "old\n")
-	write(t, e.account("p", "a", "deep", "d.txt"), "d\n")
+	write(t, e.main("p", "old.jsonl"), "old\n")
+	write(t, e.account("p", "new.jsonl"), "new\n")
+	write(t, e.account("p", "old.jsonl"), "old\n")
+	write(t, e.account("p", "deep", "d.txt"), "d\n")
+	write(t, e.account("p", "new", "subagents", "s.jsonl"), "s\n")
 
 	res := e.merge(t)
 
 	if res.Conflicts != 0 || res.Moved != 1 || !res.Linked {
 		t.Fatalf("res=%+v", res)
 	}
-	if read(t, e.main("p", "a", "new.jsonl")) != "new\n" || read(t, e.main("p", "a", "deep", "d.txt")) != "d\n" {
+	if read(t, e.main("p", "new.jsonl")) != "new\n" || read(t, e.main("p", "deep", "d.txt")) != "d\n" || read(t, e.main("p", "new", "subagents", "s.jsonl")) != "s\n" {
 		t.Fatal("merged data missing")
 	}
 }
@@ -192,16 +193,19 @@ func TestMergeIsIdempotent(t *testing.T) {
 	}
 }
 
-func TestMergeSkipsWhenMainSourceMissing(t *testing.T) {
+func TestMergeAdoptsWholeDirWhenMainHasNone(t *testing.T) {
 	e := newEnv(t)
 	write(t, e.account("p", "c.jsonl"), "c\n")
-	// main has no projects dir: nothing may be moved or created in main.
-	res, err := MergeIntoMain(e.p, e.acc, "projects", now)
-	if err != nil || res.Linked || res.Moved != 0 {
-		t.Fatalf("res=%+v err=%v", res, err)
+	write(t, e.account("p", "c", "subagents", "s.jsonl"), "s\n")
+
+	res := e.merge(t)
+
+	if res.Moved != 1 || !res.Linked {
+		t.Fatalf("res=%+v", res)
 	}
-	if read(t, e.account("p", "c.jsonl")) != "c\n" {
-		t.Fatal("account data touched")
+	assertLinked(t, e)
+	if read(t, e.main("p", "c.jsonl")) != "c\n" {
+		t.Fatal("data not adopted into main")
 	}
 }
 

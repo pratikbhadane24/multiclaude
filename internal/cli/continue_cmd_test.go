@@ -103,7 +103,7 @@ func TestContinueNoSessionExits1(t *testing.T) {
 
 	code := e.main("continue", "--from", "work", "--to", "main")
 
-	if code != ExitError || !strings.Contains(e.err.String(), "no conversation found for this folder in work") || len(e.callsTo(e.p.RealClaude)) != 0 {
+	if code != ExitError || !strings.Contains(e.err.String(), "no conversation found for this folder in shared history") || len(e.callsTo(e.p.RealClaude)) != 0 {
 		t.Fatalf("code=%d err=%s", code, e.err)
 	}
 }

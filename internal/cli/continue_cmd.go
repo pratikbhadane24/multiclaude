@@ -114,7 +114,7 @@ func (a *App) continueSession(accts []registry.Account, from registry.Account, e
 	}
 	s, err := handoff.FindLatest(a.Paths, mainAcct, cwd)
 	if errors.Is(err, handoff.ErrNoSession) {
-		return "", a.errorf("no conversation found for this folder in %s", from.Name), false
+		return "", a.errorf("no conversation found for this folder in shared history"), false
 	}
 	if err != nil {
 		return "", a.errorf("%v", err), false

@@ -116,6 +116,7 @@ Account names are `[a-z0-9-]{1,32}` and cannot be a reserved name: `main add log
 - Tokens stay in the macOS Keychain (read with `/usr/bin/security`) and in memory. They are never logged, printed, written to files, or included in `--json`. They are sent only to `api.anthropic.com`.
 - `ccm` never calls the OAuth refresh endpoint itself.
 - `ccm remove` never deletes anything without `--purge` plus confirmation.
+- The history migration refuses an account dir that is, contains or aliases `~/.claude`, skips an account with a running Claude session (a live pid in its `sessions/`, or an unparsable session file touched in the last 10 minutes; close it and re-run `ccm sync`), and needs both dirs on the same volume. Symlinks inside an account's history are kept as `*.from-<account>-<unix>` copies, never moved.
 
 ## Caveats
 
