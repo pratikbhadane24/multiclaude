@@ -57,6 +57,7 @@ func (a *App) cmdStatus(ctx context.Context, args []string) int {
 	fs := a.newFlags("status")
 	jsonOut := fs.Bool("json", false, "print JSON")
 	watch := fs.Duration("watch", 0, "refresh every interval (e.g. 30s)")
+	refreshCache := fs.Bool("refresh-cache", false, "update the status line cache quietly")
 	if _, code, ok := a.parseArgs(fs, withWatchDefault(args), 0, "status [--json] [--watch d]"); !ok {
 		return code
 	}
@@ -74,6 +75,9 @@ func (a *App) cmdStatus(ctx context.Context, args []string) int {
 		return a.watchStatus(ctx, d, *watch)
 	}
 	rows, combined := status.Collect(ctx, d)
+	if code, done := a.finishStatusCache(rows, combined, *refreshCache); done {
+		return code
+	}
 	if *jsonOut {
 		b, err := status.RenderJSON(rows, combined)
 		if err != nil {

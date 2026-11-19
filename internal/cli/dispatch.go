@@ -23,6 +23,7 @@ Commands:
   best [claude args...]         run claude as the account with most headroom
   use <name>                    print shell code that switches account
   status [--json] [--watch d]   show plan usage per account (watch: default 30s)
+  statusline [install|uninstall] Claude status line segment (install wraps your current one)
   sync                          link shared config and sync MCP servers
   t3-sync                       add every account to T3 Code
   doctor [--fix]                check (and repair) the setup
@@ -48,6 +49,7 @@ var commands = map[string]handler{
 	"best":       (*App).cmdBest,
 	"use":        (*App).cmdUse,
 	"status":     (*App).cmdStatus,
+	"statusline": (*App).cmdStatusline,
 	"sync":       (*App).cmdSync,
 	"t3-sync":    (*App).cmdT3Sync,
 	"doctor":     (*App).cmdDoctor,
