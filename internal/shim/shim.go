@@ -1,0 +1,122 @@
+// Package shim is the launcher installed as ~/.claude-accounts/bin/claude.
+// It syncs MCP servers into the active account, warns about broken shared
+// links, then execs the real claude. Nothing here may stop Claude starting
+// except being unable to find a real claude that is not the shim itself.
+package shim
+
+import (
+	"errors"
+	"fmt"
+	"io"
+	"path/filepath"
+	"strings"
+
+	"multiclaude/internal/links"
+	"multiclaude/internal/mcp"
+	"multiclaude/internal/paths"
+)
+
+const (
+	configDirEnv = "CLAUDE_CONFIG_DIR"
+	claudeArgv0  = "claude"
+	warnPrefix   = "ccm: warning: "
+)
+
+// ErrSelfExec means the real claude path resolves to the shim itself.
+var ErrSelfExec = errors.New("ccm: real claude resolves to the shim; set CCM_CLAUDE_BIN")
+
+// Deps are the side effects Main needs, injectable for tests.
+type Deps struct {
+	Paths   paths.Paths
+	Exec    func(argv0 string, argv []string, env []string) error // syscall.Exec in prod
+	Stderr  io.Writer
+	Inspect func(p paths.Paths, dir string) ([]links.Item, error)
+}
+
+// Main runs the shim. args excludes the program name; env is passed to the
+// real claude unchanged. It returns only if exec fails or is refused.
+func Main(args []string, env []string, deps Deps) error {
+	p := deps.Paths
+	if dir, ok := accountDir(env, p); ok {
+		prepareAccount(p, dir, deps)
+	}
+	if err := checkNotSelf(p); err != nil {
+		return err
+	}
+	argv := append([]string{claudeArgv0}, args...)
+	if err := deps.Exec(p.RealClaude, argv, env); err != nil {
+		return fmt.Errorf("exec %s: %w", p.RealClaude, err)
+	}
+	return nil
+}
+
+// accountDir returns the normalized CLAUDE_CONFIG_DIR when it names a
+// non-main account.
+func accountDir(env []string, p paths.Paths) (string, bool) {
+	raw := lookupEnv(env, configDirEnv)
+	if raw == "" {
+		return "", false
+	}
+	dir := paths.Normalize(raw, p.Home)
+	if dir == paths.Normalize(p.ClaudeDir, p.Home) {
+		return "", false
+	}
+	return dir, true
+}
+
+// lookupEnv returns the last value of key in env (as getenv would).
+func lookupEnv(env []string, key string) string {
+	prefix := key + "="
+	val := ""
+	for _, kv := range env {
+		if strings.HasPrefix(kv, prefix) {
+			val = kv[len(prefix):]
+		}
+	}
+	return val
+}
+
+// prepareAccount syncs MCP servers and reports replaced links. Failures are
+// only warnings: they must never block launching Claude.
+func prepareAccount(p paths.Paths, dir string, deps Deps) {
+	if _, err := mcp.Sync(p, dir); err != nil {
+		warn(deps.Stderr, "MCP sync skipped: %v", err)
+	}
+	if deps.Inspect == nil {
+		return
+	}
+	items, err := deps.Inspect(p, dir)
+	if err != nil {
+		warn(deps.Stderr, "cannot check shared links: %v", err)
+		return
+	}
+	for _, it := range items {
+		if it.State == links.StateReplaced {
+			warn(deps.Stderr, "%s is no longer shared — run ccm doctor", it.Name)
+		}
+	}
+}
+
+func warn(w io.Writer, format string, a ...any) {
+	if w == nil {
+		return
+	}
+	_, _ = fmt.Fprintf(w, warnPrefix+format+"\n", a...)
+}
+
+// checkNotSelf refuses to exec when RealClaude resolves to the shim, which
+// would loop forever. A missing shim file cannot be the target, so it passes.
+func checkNotSelf(p paths.Paths) error {
+	real, err := filepath.EvalSymlinks(p.RealClaude)
+	if err != nil {
+		return fmt.Errorf("resolve real claude %s: %w", p.RealClaude, err)
+	}
+	self, err := filepath.EvalSymlinks(p.ShimPath)
+	if err != nil {
+		return nil
+	}
+	if real == self {
+		return ErrSelfExec
+	}
+	return nil
+}
