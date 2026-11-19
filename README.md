@@ -64,6 +64,7 @@ Run `ccm` (or `ccm dash`) in a terminal. It shows each account with 5h and 7d us
 | `d` | Run doctor and show the summary |
 | `s` | Sync shared setup |
 | `t` | Sync accounts to T3 Code |
+| `A` | Show or hide accounts that are signed in as the same login as another |
 | `r` | Refresh now |
 | `?` | Help |
 | `q` / `Ctrl-C` | Quit |
@@ -78,7 +79,7 @@ Run `ccm` (or `ccm dash`) in a terminal. It shows each account with 5h and 7d us
 | `limited (5h)` / `limited (7d)` | 100% used. Wait for the reset or switch account. |
 | `logged out` | Needs `ccm login <name>`. |
 
-**Duplicates:** if two entries are logged in as the same person, the extra one is shown as `same as <name>` and collapsed so the limits are not counted twice.
+**Duplicates:** if two entries are logged in as the same person, the extra one is collapsed into the first, shown as `main (= admin)`, so the limits are not counted twice. Press `A` (or run `ccm status --all`) to list the extra one on its own row marked `same as <name>`.
 
 **Limit prompts:**
 - Pressing `⏎` on a limited account asks `<name> is limited (resets in X). Start on <best>? [y/N]`.
@@ -161,8 +162,8 @@ ccm remove <name> --purge    # also delete its folder and Keychain login
 | `ccm run <name> [claude args]` / `ccm <name> [claude args]` | Run Claude as that account. Exit code is the child's. |
 | `ccm best [claude args]` | Run on the account with the most headroom; prints the pick to stderr. Exit 2 if all are limited. |
 | `ccm use <name>` | Print shell code that switches this shell to the account (needs the `shell-init` wrapper). Sets `CCM_ACCOUNT`. |
-| `ccm continue [--from a] [--to b] [--session id]` | Resume this folder's latest chat on another account. `--from` defaults to `$CCM_ACCOUNT`, else the most limited; `--to` to the account with most headroom. Exit 2 if none free, 1 if no chat. |
-| `ccm status [--json] [--watch [d]]` | Per-account 5h/7d used, left, reset; `TODAY TOK`; `STATE`; plus an `ALL` row. `--watch` default `30s`. `--json` and `--watch` cannot be combined. `--refresh-cache` updates the status-line cache. |
+| `ccm continue [--from a] [--to b] [--session id]` | Resume this folder's latest chat on another account. `--from` defaults to `$CCM_ACCOUNT`, else the most limited; `--to` to the account with most headroom. Never picks a chat that is still open in another window (exit 1 if that is the only one; pass `--session`). The `--to` account must be a different login than `--from`. Exit 2 if none free, 1 if no chat. |
+| `ccm status [--json] [--all] [--watch [d]]` | Per-account 5h/7d used, left, reset; `TODAY TOK`; `STATE`; plus an `ALL` row. `--watch` default `30s`. `--all` also lists accounts that share a login as separate rows (`same as <name>`). `--json` and `--watch` cannot be combined. `--refresh-cache` updates the status-line cache. |
 | `ccm statusline [install\|uninstall]` | Install or remove the status line segment. Without a subcommand it is the status line itself (reads Claude's JSON on stdin, optional `--wrap "<cmd>"`). |
 | `ccm config show` | Show default and per-account args (`~/.claude-accounts/config.json`, mode 0600). |
 | `ccm config set default-args <args...>` | Args for every launch. Everything after the key is taken verbatim, including `--flags`. |
@@ -219,7 +220,7 @@ Account names are `[a-z0-9-]{1,32}` and cannot be a reserved name: `main add log
 - Existing files are backed up before change: T3 settings and `~/.claude/settings.json` become `*.ccm-backup-<unix>`; replaced links become `<file>.ccm-backup-<unix>`. Backups are never deleted.
 - Tokens stay in the macOS Keychain (read with `/usr/bin/security`) and in memory. They are never logged, printed, written to files, or included in `--json`. They are sent only to `api.anthropic.com`. `ccm` never calls the OAuth refresh endpoint itself.
 - `ccm remove` never deletes anything without `--purge` plus confirmation.
-- The history migration refuses an account dir that is, contains or aliases `~/.claude`, skips an account with a running Claude session (a live pid in its `sessions/`, or an unparsable session file touched in the last 10 minutes), needs both dirs on the same volume, and keeps symlinks inside history as `*.from-<account>-<unix>` copies instead of moving them.
+- The history migration refuses an account dir that is, contains or aliases `~/.claude`, skips an account with a running Claude session (a live pid in its `sessions/`, or an unparsable session file touched in the last 10 minutes), needs both dirs on the same volume, and keeps symlinks inside history as renamed links (`*.from-<account>-<unix>`) instead of moving them.
 - Default args are never applied to internal `claude auth` calls.
 
 ## Caveats

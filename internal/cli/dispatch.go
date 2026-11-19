@@ -26,8 +26,8 @@ Commands:
   best [claude args...]         run claude as the account with most headroom
   use <name>                    print shell code that switches account
   continue [--from a] [--to b] [--session id]   resume this folder's latest chat on another account
-  status [--json] [--watch d] [--refresh-cache]
-                                show plan usage per account (watch: default 30s)
+  status [--json] [--all] [--watch d] [--refresh-cache]
+                                show plan usage per account (--all: list same-login accounts too; watch: default 30s)
   statusline [install|uninstall] Claude status line segment (install wraps your current one)
   sync                          link shared config and sync MCP servers
   t3-sync                       add every account to T3 Code (and sync launch args)
