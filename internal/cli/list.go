@@ -26,7 +26,7 @@ func (a *App) cmdList(ctx context.Context, args []string) int {
 	tw := tabwriter.NewWriter(a.Out, 0, 0, listPad, ' ', 0)
 	fmt.Fprintln(tw, "NAME\tDIR\tEMAIL\tPLAN\tLOGGED IN")
 	for i, acct := range accts {
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", acct.Name, a.accountDir(acct), dash(acct.Email),
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", acct.Name, a.accountDir(acct), dash(listEmail(acct, results[i])),
 			dash(planText(results[i])), loginText(acct, results[i]))
 	}
 	if err := tw.Flush(); err != nil {
@@ -58,6 +58,14 @@ type loginResult struct {
 func (a *App) statusOf(ctx context.Context, acct registry.Account) loginResult {
 	st, err := auth.GetStatus(ctx, a.Runner, a.Paths, acct)
 	return loginResult{st, err}
+}
+
+// listEmail prefers the registry email and falls back to the logged-in one.
+func listEmail(acct registry.Account, r loginResult) string {
+	if acct.Email != "" || r.err != nil || !r.st.LoggedIn {
+		return acct.Email
+	}
+	return r.st.Email
 }
 
 func planText(r loginResult) string {

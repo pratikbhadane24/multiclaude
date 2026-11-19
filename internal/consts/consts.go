@@ -17,7 +17,7 @@ var AccountNameRE = regexp.MustCompile(`^[a-z0-9-]{1,32}$`)
 var ReservedNames = map[string]struct{}{
 	"main": {}, "add": {}, "login": {}, "list": {}, "run": {}, "best": {}, "use": {},
 	"status": {}, "sync": {}, "t3-sync": {}, "doctor": {}, "remove": {},
-	"shell-init": {}, "help": {}, "install": {}, "bin": {}, "browser": {},
+	"shell-init": {}, "help": {}, "install": {}, "bin": {}, "browser": {}, "config": {},
 }
 
 // SharedItems are linked from ~/.claude into each account dir when present.
