@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"multiclaude/internal/auth"
+	"multiclaude/internal/browser"
 	"multiclaude/internal/registry"
 )
 
@@ -22,7 +23,11 @@ func (a *App) signInHint(email string) {
 // loginOne runs the login for one account and returns an exit code.
 func (a *App) loginOne(ctx context.Context, acct registry.Account) int {
 	a.signInHint(acct.Email)
-	st, err := auth.Login(ctx, a.Runner, a.Paths, acct, acct.Email)
+	mode, err := browser.ParseMode(acct.Browser)
+	if err != nil {
+		a.warnf("%s: %v; using copy", acct.Name, err)
+	}
+	st, err := auth.LoginWith(ctx, a.Runner, a.Paths, acct, acct.Email, auth.LoginOptions{SelfExe: a.SelfExe, Mode: mode})
 	var mm *auth.MismatchError
 	if errors.As(err, &mm) {
 		fmt.Fprintf(a.Err, "ccm: signed in as %s but account %q expects %s. Run `ccm login %s` again using the right Claude account.\n", mm.Got, acct.Name, mm.Want, acct.Name)

@@ -23,6 +23,8 @@ type Account struct {
 	Name  string `json:"name"`
 	Dir   string `json:"dir"`
 	Email string `json:"email,omitempty"`
+	// Browser is the login-link mode ("copy", "incognito", "chrome:<Profile dir>"); empty means copy.
+	Browser string `json:"browser,omitempty"`
 }
 
 // IsMain reports whether the account is the main (~/.claude) account.

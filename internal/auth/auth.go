@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"multiclaude/internal/browser"
 	"multiclaude/internal/paths"
 	"multiclaude/internal/registry"
 	"multiclaude/internal/run"
@@ -74,13 +75,38 @@ func Refresh(ctx context.Context, r run.Runner, p paths.Paths, a registry.Accoun
 	return err
 }
 
-// Login runs an interactive login and verifies the resulting email.
+// LoginOptions controls how the login URL is presented.
+type LoginOptions struct {
+	SelfExe string // ccm binary used as $BROWSER; empty leaves the browser env alone
+	Mode    browser.Mode
+}
+
+// loginEnv returns the login env: Env plus the BROWSER contract when SelfExe is set.
+func loginEnv(a registry.Account, email string, opts LoginOptions) []string {
+	env := Env(a, os.Environ())
+	if opts.SelfExe == "" {
+		return env
+	}
+	return append(env,
+		"BROWSER="+opts.SelfExe,
+		browser.EnvAccount+"="+a.Name,
+		browser.EnvEmail+"="+email,
+		browser.EnvMode+"="+opts.Mode.String(),
+	)
+}
+
+// Login runs an interactive login with claude's default browser handling.
 func Login(ctx context.Context, r run.Runner, p paths.Paths, a registry.Account, email string) (Status, error) {
+	return LoginWith(ctx, r, p, a, email, LoginOptions{})
+}
+
+// LoginWith runs an interactive login and verifies the resulting email.
+func LoginWith(ctx context.Context, r run.Runner, p paths.Paths, a registry.Account, email string, opts LoginOptions) (Status, error) {
 	args := []string{"auth", "login", "--claudeai"}
 	if email != "" {
 		args = append(args, "--email", email)
 	}
-	res, err := r.Run(ctx, Binary(p), args, Env(a, os.Environ()), true)
+	res, err := r.Run(ctx, Binary(p), args, loginEnv(a, email, opts), true)
 	if err != nil {
 		return Status{}, fmt.Errorf("login %s: %w", a.Name, err)
 	}

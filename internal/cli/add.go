@@ -57,7 +57,7 @@ func (a *App) Add(ctx context.Context, name, email string) int {
 		return a.errorf("email %s is already used by account %q", email, owner)
 	}
 	dir := registry.NormalizeDir(filepath.Join(a.Paths.AccountsRoot, name), a.Paths.Home)
-	acct := registry.Account{Name: name, Dir: dir, Email: email}
+	acct := registry.Account{Name: name, Dir: dir, Email: email, Browser: existing.Browser}
 	if code := a.setupAccount(acct, accts); code != ExitOK {
 		return code
 	}
