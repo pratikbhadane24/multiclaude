@@ -32,6 +32,10 @@ type jsonRow struct {
 	// Aliases are accounts signed in as the same login, merged into this row.
 	Aliases []string `json:"aliases,omitempty"`
 	SameAs  string   `json:"same_as,omitempty"`
+	// StaleSeconds is the age of usage kept from an earlier fetch (stale rows only).
+	StaleSeconds int64      `json:"stale_seconds,omitempty"`
+	RetryAt      *time.Time `json:"retry_at,omitempty"`
+	RateLimited  bool       `json:"rate_limited,omitempty"`
 }
 
 type jsonCombined struct {
@@ -64,6 +68,11 @@ func toJSONRow(r Row) jsonRow {
 		LinkWarnings: append([]string{}, r.LinkWarnings...),
 		Aliases:      append([]string(nil), r.Aliases...),
 		SameAs:       r.SameAs,
+		RetryAt:      r.RetryAt,
+		RateLimited:  r.RateLimited,
+	}
+	if isStale(r) {
+		jr.StaleSeconds = int64(r.StaleFor / time.Second)
 	}
 	if r.Usage != nil {
 		idle := countableRow(r)

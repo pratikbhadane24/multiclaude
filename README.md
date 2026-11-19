@@ -96,7 +96,9 @@ ccm statusline install      # shows the exact change, asks [y/N], backs up setti
 ccm statusline uninstall    # restores your previous status line
 ```
 
-If you already have a status line, install **wraps** it: your existing output stays, with the ccm segment added after it. Running install twice changes nothing. It reads a short-lived cache, so it never slows the prompt; if the cache is missing you just see `ccm: <account>`.
+If you already have a status line, install **wraps** it: your existing output stays, with the ccm segment added after it. Running install twice changes nothing. It reads a short-lived cache, so it never slows the prompt; if the cache is missing you just see `ccm: <account>`. A trailing `~` means the numbers are from the last good read because the latest one failed.
+
+**Usage reads are rate limited.** The usage API is undocumented and answers `429` when polled too often, so every ccm command (status, dash, the status line, best, continue) reads it through one shared cache: an account is read at most once every 3 minutes, a `429` backs off 5m → 10m → 20m → 30m (or the server's `Retry-After` if longer), other errors wait 2 minutes, and a failed read never replaces the last good numbers. Such rows show their numbers with a state like `ok · stale 4m`; with no earlier numbers they say `rate limited (retry in 5m)`. `r` in the dashboard and `ccm status --refresh` skip the 3-minute reuse but never a backoff.
 
 This is the one place ccm writes `~/.claude/settings.json`, and only when you say yes.
 
@@ -163,7 +165,7 @@ ccm remove <name> --purge    # also delete its folder and Keychain login
 | `ccm best [claude args]` | Run on the account with the most headroom; prints the pick to stderr. Exit 2 if all are limited. |
 | `ccm use <name>` | Print shell code that switches this shell to the account (needs the `shell-init` wrapper). Sets `CCM_ACCOUNT`. |
 | `ccm continue [--from a] [--to b] [--session id]` | Resume this folder's latest chat on another account. `--from` defaults to `$CCM_ACCOUNT`, else the most limited; `--to` to the account with most headroom. Never picks a chat that is still open in another window (exit 1 if that is the only one; pass `--session`). The `--to` account must be a different login than `--from`. Exit 2 if none free, 1 if no chat. |
-| `ccm status [--json] [--all] [--watch [d]]` | Per-account 5h/7d used, left, reset; `TODAY TOK`; `STATE`; plus an `ALL` row. `--watch` default `30s`. `--all` also lists accounts that share a login as separate rows (`same as <name>`). `--json` and `--watch` cannot be combined. `--refresh-cache` updates the status-line cache. |
+| `ccm status [--json] [--all] [--refresh] [--watch [d]]` | Per-account 5h/7d used, left, reset; `TODAY TOK`; `STATE`; plus an `ALL` row. `--watch` default `30s`. `--all` also lists accounts that share a login as separate rows (`same as <name>`). `--json` and `--watch` cannot be combined. `--refresh` reads usage now instead of reusing a result under 3 minutes old. `--refresh-cache` updates the status-line cache. |
 | `ccm statusline [install\|uninstall]` | Install or remove the status line segment. Without a subcommand it is the status line itself (reads Claude's JSON on stdin, optional `--wrap "<cmd>"`). |
 | `ccm config show` | Show default and per-account args (`~/.claude-accounts/config.json`, mode 0600). |
 | `ccm config set default-args <args...>` | Args for every launch. Everything after the key is taken verbatim, including `--flags`. |
@@ -198,7 +200,8 @@ Account names are `[a-z0-9-]{1,32}` and cannot be a reserved name: `main add log
   accounts.json            registry
   config.json              default and per-account args
   state.json               MCP origin, last T3 launchArgs
-  cache/usage.json         short-lived usage cache for the status line
+  cache/usage.json         usage cache + per-account fetch state (shared by every ccm process)
+  cache/usage.lock         lock guarding writes to usage.json
   bin/claude               native Go shim `ccm-shim` (syncs MCP, then execs the real claude)
   <name>/                  CLAUDE_CONFIG_DIR for that account
     .claude.json  history.jsonl  sessions/   per account

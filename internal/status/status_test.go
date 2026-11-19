@@ -143,41 +143,6 @@ func TestPickBest(t *testing.T) {
 	}
 }
 
-func TestWatcherRetriesErrorsAfterTenMinutes(t *testing.T) {
-	clock := now
-	var mu sync.Mutex
-	calls := map[string]int{}
-	d := Deps{
-		Accounts: []registry.Account{{Name: "good"}, {Name: "bad"}},
-		Now:      func() time.Time { return clock },
-		Fetch: func(_ context.Context, a registry.Account) usage.AccountUsage {
-			mu.Lock()
-			calls[a.Name]++
-			mu.Unlock()
-			if a.Name == "bad" {
-				return usage.AccountUsage{Account: "bad", State: usage.StateAPIError, Err: "boom"}
-			}
-			return ok("good", f(1), f(1), nil)
-		},
-	}
-	w := NewWatcher(d.Now)
-	step := func() []Row { rows, _ := w.Step(context.Background(), d); return rows }
-	step()
-	clock = clock.Add(2 * time.Minute)
-	rows := step()
-	if calls["good"] != 2 || calls["bad"] != 1 {
-		t.Fatalf("calls %v", calls)
-	}
-	if rows[1].State != usage.StateAPIError || rows[1].Err != "boom" {
-		t.Fatalf("cached row %+v", rows[1])
-	}
-	clock = clock.Add(8 * time.Minute)
-	step()
-	if calls["bad"] != 2 {
-		t.Fatalf("retry after 10m: %v", calls)
-	}
-}
-
 func TestRenderErrors(t *testing.T) {
 	rows := []Row{{AccountUsage: ok("a", f(1), f(1), nil), LinkErr: "y"}}
 	c := usage.Aggregate([]usage.AccountUsage{rows[0].AccountUsage})
@@ -230,30 +195,5 @@ func TestPickBestExpiredRefreshedAndTie(t *testing.T) {
 	got, _ = PickBest([]usage.AccountUsage{ok("first", f(50), f(50), nil), ok("second", f(50), f(50), nil)})
 	if got.Account != "first" {
 		t.Fatalf("tie %v", got.Account)
-	}
-}
-
-func TestWatcherLoggedOutBackoff(t *testing.T) {
-	clock := now
-	calls := 0
-	d := Deps{
-		Accounts: []registry.Account{{Name: "x"}},
-		Now:      func() time.Time { return clock },
-		Fetch: func(context.Context, registry.Account) usage.AccountUsage {
-			calls++
-			return usage.AccountUsage{Account: "x", State: usage.StateLoggedOut}
-		},
-	}
-	w := NewWatcher(d.Now)
-	w.Step(context.Background(), d)
-	clock = clock.Add(9 * time.Minute)
-	w.Step(context.Background(), d)
-	if calls != 1 {
-		t.Fatalf("calls %d", calls)
-	}
-	clock = clock.Add(time.Minute)
-	rows, _ := w.Step(context.Background(), d)
-	if calls != 2 || rows[0].State != usage.StateLoggedOut {
-		t.Fatalf("calls %d %+v", calls, rows)
 	}
 }

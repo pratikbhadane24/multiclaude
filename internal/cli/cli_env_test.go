@@ -37,6 +37,17 @@ type cliEnv struct {
 	creds    map[string]bool   // keychain service -> present
 	usage    map[string]string // keychain service -> usage body (token is per service)
 	exitCode int               // code returned for interactive runs
+	// httpCalls counts usage requests per keychain service.
+	httpCalls map[string]int
+}
+
+// rateLimitedBody makes the fake usage API answer 429 for that service.
+const rateLimitedBody = "RATE-LIMITED"
+
+func (e *cliEnv) calls(dir string) int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.httpCalls[keychain.Service(dir)]
 }
 
 type fakeTransport struct{ env *cliEnv }
@@ -45,10 +56,14 @@ func (f fakeTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	svc := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "+testToken+"|")
 	f.env.mu.Lock()
 	body, ok := f.env.usage[svc]
+	f.env.httpCalls[svc]++
 	f.env.mu.Unlock()
 	code := http.StatusOK
-	if !ok {
+	switch {
+	case !ok:
 		code, body = http.StatusInternalServerError, "oops"
+	case body == rateLimitedBody:
+		code, body = http.StatusTooManyRequests, `{"error":{"type":"rate_limit_error"}}`
 	}
 	return &http.Response{StatusCode: code, Body: io.NopCloser(strings.NewReader(body)), Header: http.Header{}, Request: r}, nil
 }
@@ -62,7 +77,7 @@ func newCLI(t *testing.T, in string) *cliEnv {
 		RealClaude: filepath.Join(root, "real", "claude"), T3Settings: filepath.Join(root, ".t3", "userdata", "settings.json"),
 	}
 	e := &cliEnv{p: p, out: &bytes.Buffer{}, err: &bytes.Buffer{}, workDir: filepath.Join(p.AccountsRoot, "work"),
-		creds: map[string]bool{}, usage: map[string]string{}}
+		creds: map[string]bool{}, usage: map[string]string{}, httpCalls: map[string]int{}}
 	mustMkdir(t, p.ClaudeDir)
 	mustMkdir(t, e.workDir)
 	mustWrite(t, filepath.Join(p.ClaudeDir, "CLAUDE.md"), "shared")

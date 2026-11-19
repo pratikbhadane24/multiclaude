@@ -29,6 +29,10 @@
 - P6a: complete (review Approved; Imp: LaunchCmd swallows config error → P6d). P6b merged be47f02 → review. Ruling P-R7: login refusal only on add (not login) so existing admin dup still works — accepted.
 - P6d: merged 28597ce. Ruling P-R8 (user wants speed): P6d task review folded into the phase-2 final whole-branch review (opus) — cost: one review seat fewer on a small UI diff.
 
+## Usage API rate limiting (429 fix)
+- Ruling U-R1: every status.Collect caller fetches through status.CachedFetch backed by cache/usage.json (fetch state per account: fetched_at, last_error, rate_limited, backoff_until, backoff_step; writes merged under a flock on cache/usage.lock). MinFetchInterval 3m; 429 backoff 5/10/20/30m (max with Retry-After seconds); other errors 2m; force skips only the min interval. Failed fetches keep last good usage (shown with `· stale Xm`, counted in totals and best). Watcher's ad-hoc 10m error retry removed (subsumed). Status line spawns its refresher only when the snapshot is older than MinFetchInterval.
+- Ruling U-R2: duplicate logins share one request via usage.SharedFetches keyed by account UUID (in flight, or finished within 15s). The decide→fetch step is not held under the lock, so two processes starting in the same instant can both fetch once — accepted (bounded by the min interval afterwards).
+
 ## Deferred minors (phase 2 final re-review)
 - dashboard resumes recorded session id without checking transcript exists; /clear changes session id
 - --resume launch records no new id (falls back to latest idle)

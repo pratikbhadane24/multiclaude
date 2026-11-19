@@ -21,9 +21,11 @@ import (
 )
 
 const (
-	configDirEnv   = "CLAUDE_CONFIG_DIR"
-	separator      = " │ "
-	staleAfter     = 60 * time.Second
+	configDirEnv = "CLAUDE_CONFIG_DIR"
+	separator    = " │ "
+	// staleAfter matches the fetch cache's min interval: a younger cache
+	// would only be served back from itself.
+	staleAfter     = status.MinFetchInterval
 	lockFreshFor   = 60 * time.Second
 	wrapTimeout    = time.Second
 	maxStdin       = 1 << 20
@@ -35,6 +37,8 @@ const (
 	lockFileMode   = 0o600
 	waitDelay      = 50 * time.Millisecond
 	loggedOutState = "logged-out"
+	// staleMark follows usage kept from an earlier fetch (the latest failed).
+	staleMark = "~"
 )
 
 // Deps are the injected collaborators of Render.
@@ -123,7 +127,11 @@ func ccmPart(name string, c *status.CacheAccount, now time.Time) string {
 	if len(segs) == 0 {
 		return out
 	}
-	return out + " " + strings.Join(segs, " · ")
+	out += " " + strings.Join(segs, " · ")
+	if c.Stale {
+		out += " " + staleMark
+	}
+	return out
 }
 
 func findAccount(c status.Cache, name string) *status.CacheAccount {

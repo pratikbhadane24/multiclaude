@@ -19,7 +19,7 @@ const demoEcho = "/bin/echo"
 func Demo(d Deps) Deps {
 	d = withDefaults(d)
 	now := d.Now
-	d.Collect = func(_ context.Context, show bool) Snapshot { return demoSnapshot(now(), show) }
+	d.Collect = func(_ context.Context, o CollectOptions) Snapshot { return demoSnapshot(now(), o.ShowDuplicates) }
 	d.Launch = func(name string, _ []string) (*exec.Cmd, string, error) {
 		return exec.Command(demoEcho, "demo: would run claude as", name), "", nil
 	}

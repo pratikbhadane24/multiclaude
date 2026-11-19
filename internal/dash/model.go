@@ -211,12 +211,16 @@ func (m Model) afterStaleSnapshot() (Model, tea.Cmd) {
 	return m, m.collectCmd()
 }
 
-func (m Model) refresh() (Model, tea.Cmd) {
+func (m Model) refresh() (Model, tea.Cmd) { return m.refreshWith(false) }
+
+// refreshWith starts a collection unless one is in flight; force (the r key)
+// refetches recent results too, but never an account that is backing off.
+func (m Model) refreshWith(force bool) (Model, tea.Cmd) {
 	if m.loading {
 		return m, nil
 	}
 	m.loading = true
-	return m, m.collectCmd()
+	return m, m.collectWith(force)
 }
 
 func (m Model) onTick() (tea.Model, tea.Cmd) {

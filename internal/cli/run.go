@@ -49,8 +49,10 @@ func (a *App) cmdBest(ctx context.Context, args []string) int {
 	if err != nil {
 		return a.errorf("%v", err)
 	}
-	d := status.Deps{Accounts: accts, Fetch: a.fetcher().Fetch, Paths: a.Paths, Now: a.Now}
+	cf := a.cachedFetch(false)
+	d := status.Deps{Accounts: accts, Fetch: cf.Fetch, Paths: a.Paths, Now: a.Now}
 	rows, combined := status.Collect(ctx, d)
+	a.warnCacheErr(cf)
 	list := make([]usage.AccountUsage, len(rows))
 	for i, r := range rows {
 		list[i] = r.AccountUsage

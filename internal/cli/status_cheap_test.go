@@ -25,7 +25,7 @@ func TestRefreshCacheSkipsEmailLookupsAndTodayScan(t *testing.T) {
 
 func TestCheapDepsDropTodayAndEmailFallback(t *testing.T) {
 	e := newCLI(t, "")
-	d := e.app.statusDeps(nil)
+	d := e.app.statusDeps(nil, e.app.cachedFetch(false))
 	if d.Today == nil || d.EmailFallback == nil {
 		t.Fatal("precondition: normal deps use both")
 	}

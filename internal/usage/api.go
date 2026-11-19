@@ -9,6 +9,8 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"multiclaude/internal/consts"
@@ -130,6 +132,18 @@ type AccountUsage struct {
 	// AccountUUID identifies the login behind the credentials; used only to
 	// detect two accounts signed in as the same user. Never printed.
 	AccountUUID string
+	// RateLimited means the usage API answered 429 (now, or at the last
+	// attempt when the result is served from the cache).
+	RateLimited bool
+	// RetryAfter is the server's Retry-After on a 429 (0 when absent).
+	RetryAfter time.Duration
+	// Freshness, set by the status fetch cache. Stale means Usage is the
+	// last good data while the latest fetch failed or is backing off;
+	// StaleFor is its age. RetryAt/RetryIn say when the next fetch may run.
+	Stale    bool
+	StaleFor time.Duration
+	RetryAt  *time.Time
+	RetryIn  time.Duration
 }
 
 // Fetcher fetches usage for accounts.
@@ -139,7 +153,10 @@ type Fetcher struct {
 	Now    func() time.Time
 	// Refresh renews an account's credentials (wired by the caller).
 	Refresh func(ctx context.Context, a registry.Account) error
-	url     string
+	// Shared (optional) lets accounts signed in as the same login share one
+	// usage request; nil fetches every account on its own.
+	Shared *SharedFetches
+	url    string
 }
 
 // WithURL returns a copy of f targeting url (for tests).
@@ -169,24 +186,51 @@ func (f Fetcher) now() time.Time {
 	return time.Now()
 }
 
-func (f Fetcher) get(ctx context.Context, token string) (int, []byte, error) {
+// response is the outcome of one usage request.
+type response struct {
+	code       int
+	body       []byte
+	retryAfter time.Duration
+	err        error
+}
+
+func (f Fetcher) get(ctx context.Context, token string) response {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, f.endpoint(), nil)
 	if err != nil {
-		return 0, nil, errors.New("build request")
+		return response{err: errors.New("build request")}
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("anthropic-beta", consts.UsageBeta)
 	resp, err := f.client().Do(req)
 	if err != nil {
 		// Deliberately unwrapped: keep error text free of request details.
-		return 0, nil, errors.New(transportErrText(err))
+		return response{err: errors.New(transportErrText(err))}
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBodyBytes))
 	if err != nil {
-		return 0, nil, errors.New("read response")
+		return response{err: errors.New("read response")}
 	}
-	return resp.StatusCode, body, nil
+	return response{code: resp.StatusCode, body: body, retryAfter: parseRetryAfter(resp.Header.Get("Retry-After"))}
+}
+
+// parseRetryAfter reads a Retry-After given in seconds; anything else
+// (absent, zero, negative, an HTTP date) is 0.
+func parseRetryAfter(v string) time.Duration {
+	secs, err := strconv.Atoi(strings.TrimSpace(v))
+	if err != nil || secs <= 0 {
+		return 0
+	}
+	return time.Duration(secs) * time.Second
+}
+
+// getFirst is the first request of a fetch: shared with other accounts of
+// the same login when f.Shared is set.
+func (f Fetcher) getFirst(ctx context.Context, uuid, token string) response {
+	if f.Shared == nil || uuid == "" {
+		return f.get(ctx, token)
+	}
+	return f.Shared.do(uuid, func() response { return f.get(ctx, token) })
 }
 
 // transportErrText maps a transport error to a fixed, detail-free message.
@@ -238,28 +282,33 @@ func (f Fetcher) Fetch(ctx context.Context, a registry.Account) AccountUsage {
 		refreshed = true
 	}
 	res.Plan, res.AccountUUID = creds.SubscriptionType, creds.AccountUUID
-	code, body, err := f.get(ctx, creds.AccessToken)
-	if err == nil && code == http.StatusUnauthorized && !refreshed {
+	resp := f.getFirst(ctx, creds.AccountUUID, creds.AccessToken)
+	if resp.err == nil && resp.code == http.StatusUnauthorized && !refreshed {
 		if creds, res, ok = f.refreshAndRead(ctx, a, res); !ok {
 			return res
 		}
 		refreshed = true
 		res.Plan, res.AccountUUID = creds.SubscriptionType, creds.AccountUUID
-		code, body, err = f.get(ctx, creds.AccessToken)
+		resp = f.get(ctx, creds.AccessToken)
 	}
-	return finish(res, refreshed, code, body, err)
+	return finish(res, refreshed, resp)
 }
 
-func finish(res AccountUsage, refreshed bool, code int, body []byte, err error) AccountUsage {
-	if err != nil {
-		res.State, res.Err = StateAPIError, err.Error()
+func finish(res AccountUsage, refreshed bool, resp response) AccountUsage {
+	if resp.err != nil {
+		res.State, res.Err = StateAPIError, resp.err.Error()
 		return res
 	}
-	if code != http.StatusOK {
-		res.State, res.Err = StateAPIError, fmt.Sprintf("HTTP %d", code)
+	if resp.code == http.StatusTooManyRequests {
+		res.State, res.Err = StateAPIError, "rate limited"
+		res.RateLimited, res.RetryAfter = true, resp.retryAfter
 		return res
 	}
-	u, perr := Parse(body)
+	if resp.code != http.StatusOK {
+		res.State, res.Err = StateAPIError, fmt.Sprintf("HTTP %d", resp.code)
+		return res
+	}
+	u, perr := Parse(resp.body)
 	if perr != nil {
 		res.State, res.Err = StateAPIError, "bad response"
 		return res

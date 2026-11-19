@@ -91,11 +91,16 @@ func severeWindow(r Row, pick func(WindowView) bool) string {
 	return ""
 }
 
-// StateLabel is the STATE column text: limited beats low beats ok.
+// StateLabel is the STATE column text: limited beats low beats ok. Usage
+// kept from an earlier fetch gets a " · stale 4m" suffix.
 func StateLabel(r Row) string {
 	if r.SameAs != "" {
 		return "same as " + r.SameAs
 	}
+	return baseLabel(r) + StaleSuffix(r)
+}
+
+func baseLabel(r Row) string {
 	if lim := limitedWindow(r); lim != "" {
 		return "limited (" + lim + ")"
 	}
@@ -109,6 +114,9 @@ func StateLabel(r Row) string {
 		return "ok (token refreshed)"
 	case usage.StateLoggedOut:
 		return "logged out → ccm login " + r.Account
+	}
+	if r.RateLimited {
+		return rateLimitedLabel(r)
 	}
 	if r.Err != "" {
 		return "api error: " + r.Err

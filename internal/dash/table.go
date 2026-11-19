@@ -21,7 +21,7 @@ const (
 	// barColSuffix is the room for " 100%" after a bar.
 	barColSuffix = 5
 	resetWidth   = 8
-	stateWidth   = 12
+	stateWidth   = 18
 	markerText   = "› "
 	bestText     = "★"
 )

@@ -33,11 +33,19 @@ type Snapshot struct {
 	CacheErr error
 }
 
+// CollectOptions tune one collection.
+type CollectOptions struct {
+	// ShowDuplicates keeps accounts that share a login as separate rows.
+	ShowDuplicates bool
+	// Force refetches usage even when the cached result is recent (r key);
+	// an account backing off after errors is still not fetched.
+	Force bool
+}
+
 // Deps are the dashboard's injected collaborators.
 type Deps struct {
 	// Collect gathers usage for every registered account.
-	// showDuplicates keeps accounts that share a login as separate rows.
-	Collect func(ctx context.Context, showDuplicates bool) Snapshot
+	Collect func(ctx context.Context, opts CollectOptions) Snapshot
 	// Launch builds the command `ccm <name> [extra...]` would run (claude as
 	// that account, config args first).
 	// warning is a non-fatal config problem (the launch still happens).

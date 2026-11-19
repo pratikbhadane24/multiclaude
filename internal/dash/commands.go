@@ -31,11 +31,15 @@ func NewWindowArgv(selfPath, name string) []string {
 	return []string{osascriptPath, "-e", script}
 }
 
-func (m Model) collectCmd() tea.Cmd {
+func (m Model) collectCmd() tea.Cmd { return m.collectWith(false) }
+
+// collectWith starts a collection; force skips the fetch cache's min interval.
+func (m Model) collectWith(force bool) tea.Cmd {
 	ctx, collect, now, show := m.ctx, m.deps.Collect, m.deps.Now, m.deps.ShowDuplicates
 	started := now()
+	opts := CollectOptions{ShowDuplicates: show, Force: force}
 	return func() tea.Msg {
-		return snapshotMsg{snap: collect(ctx, show), started: started, at: now(), showDuplicates: show}
+		return snapshotMsg{snap: collect(ctx, opts), started: started, at: now(), showDuplicates: show}
 	}
 }
 

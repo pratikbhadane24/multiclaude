@@ -50,6 +50,9 @@ func (m Model) detailLines() []string {
 	if full := status.StateLabel(r); full != state && r.SameAs == "" && state != idleText {
 		state = full
 	}
+	if note := status.FetchNote(r); note != "" {
+		state += sep + note
+	}
 	title := []string{styleHeader.Render(r.Account), r.Email, r.Plan, m.accountDir(r.Account)}
 	return []string{
 		joinNonEmpty(title),

@@ -62,8 +62,10 @@ func (a *App) collectUsage(ctx context.Context, accts []registry.Account, need b
 	if !need {
 		return nil
 	}
-	d := status.Deps{Accounts: accts, Fetch: a.fetcher().Fetch, Paths: a.Paths, Now: a.Now, EmailFallback: a.authEmail, ShowDuplicates: true}
+	cf := a.cachedFetch(false)
+	d := status.Deps{Accounts: accts, Fetch: cf.Fetch, Paths: a.Paths, Now: a.Now, EmailFallback: a.authEmail, ShowDuplicates: true}
 	rows, _ := status.Collect(ctx, d)
+	a.warnCacheErr(cf)
 	list := make([]usage.AccountUsage, len(rows))
 	for i, r := range rows {
 		list[i] = r.AccountUsage

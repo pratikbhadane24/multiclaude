@@ -13,7 +13,7 @@ func TestDemoReplacesEverySideEffect(t *testing.T) {
 	d := Demo(newTestDeps(r))
 	ctx := context.Background()
 
-	snap := d.Collect(ctx, false)
+	snap := d.Collect(ctx, CollectOptions{})
 	c, _, err := d.Launch("main", nil)
 	d.Doctor(ctx)
 	_ = d.Run(ctx, "/usr/bin/osascript", nil)
@@ -41,7 +41,7 @@ func TestDemoViewSnapshot(t *testing.T) {
 	d := Demo(newTestDeps(&recorder{}))
 	m := New(context.Background(), d)
 	m = update(t, m, tea.WindowSizeMsg{Width: 100, Height: 30})
-	m = update(t, m, snapshotMsg{snap: d.Collect(context.Background(), false), at: testNow})
+	m = update(t, m, snapshotMsg{snap: d.Collect(context.Background(), CollectOptions{}), at: testNow})
 
 	v := m.View()
 	t.Log("\n" + v)

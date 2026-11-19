@@ -78,15 +78,21 @@ func bar(v status.WindowView, w int) string {
 }
 
 // stateText is the short STATE cell: the shared label without its detail
-// (arrow hints, error text); an idle account says so.
+// (arrow hints, error text); an idle account says so. Usage kept from an
+// earlier fetch shows "ok · stale 4m" in yellow.
 func stateText(r status.Row) (string, lipgloss.Style) {
 	label := status.StateLabel(r)
-	for _, cut := range []string{" →", ":"} {
+	for _, cut := range []string{" →", ":", " ·"} {
 		label, _, _ = strings.Cut(label, cut)
 	}
+	short, _, _ := strings.Cut(label, " (")
 	switch {
 	case r.SameAs != "":
 		return "= " + r.SameAs, styleDim
+	case status.StaleSuffix(r) != "":
+		return short + status.StaleSuffix(r), styleWarn
+	case r.Usage == nil && r.RateLimited:
+		return short, styleBad
 	case strings.HasPrefix(label, "limited"), strings.HasPrefix(label, "api error"):
 		return label, styleBad
 	case strings.HasPrefix(label, "low"), label == "logged out":

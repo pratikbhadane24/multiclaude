@@ -74,17 +74,19 @@ func (a *App) dashDeps() dashboard.Deps {
 }
 
 // dashCollect re-reads the registry (accounts may have been added) and
-// collects usage the same way `ccm status` does, including writing the
+// collects usage the same way `ccm status` does, through the fetch cache
+// (opts.Force skips its min interval, never a backoff), including writing the
 // status line's usage cache (a failed write is reported in the snapshot).
-func (a *App) dashCollect(ctx context.Context, showDuplicates bool) dashboard.Snapshot {
+func (a *App) dashCollect(ctx context.Context, opts dashboard.CollectOptions) dashboard.Snapshot {
 	accts, err := registry.Load(a.Paths)
 	if err != nil {
 		return dashboard.Snapshot{Err: err}
 	}
-	deps := a.statusDeps(accts)
-	deps.ShowDuplicates = showDuplicates
+	cf := a.cachedFetch(opts.Force)
+	deps := a.statusDeps(accts, cf)
+	deps.ShowDuplicates = opts.ShowDuplicates
 	rows, combined := status.Collect(ctx, deps)
-	cacheErr := status.WriteCache(a.Paths, rows, combined, a.Now())
+	cacheErr := errors.Join(cf.Err(), status.WriteCache(a.Paths, rows, combined, a.Now()))
 	return dashboard.Snapshot{Rows: rows, Combined: combined, Accounts: accts,
 		Today: combined.Today, TodayErr: combined.TodayErr, CacheErr: cacheErr}
 }

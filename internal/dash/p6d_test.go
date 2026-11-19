@@ -237,7 +237,7 @@ func TestHandoffExpiresAfterTwoMinutes(t *testing.T) {
 func TestDemoHasIdleLowAndDuplicateRows(t *testing.T) {
 	d := Demo(newTestDeps(&recorder{}))
 	m := New(context.Background(), d)
-	m = update(t, m, snapshotMsg{snap: d.Collect(context.Background(), false), at: testNow})
+	m = update(t, m, snapshotMsg{snap: d.Collect(context.Background(), CollectOptions{}), at: testNow})
 
 	v := strings.Join(m.tableLines(), "\n")
 

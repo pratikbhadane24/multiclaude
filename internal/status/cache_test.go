@@ -57,8 +57,10 @@ func TestWriteCacheRoundTripAndModes(t *testing.T) {
 		t.Fatalf("dir mode %v", st.Mode())
 	}
 	entries, _ := os.ReadDir(filepath.Dir(file))
-	if len(entries) != 1 {
-		t.Fatalf("temp files left: %v", entries)
+	for _, e := range entries {
+		if e.Name() != "usage.json" && e.Name() != "usage.lock" {
+			t.Fatalf("temp files left: %v", entries)
+		}
 	}
 }
 

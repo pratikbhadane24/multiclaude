@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"multiclaude/internal/config"
+	dashboard "multiclaude/internal/dash"
 	"multiclaude/internal/doctor"
 	"multiclaude/internal/run"
 	"multiclaude/internal/status"
@@ -96,7 +97,7 @@ func TestDashCollectWritesUsageCache(t *testing.T) {
 	e := newCLI(t, "")
 	e.loginWithUsage(e.workDir, usageBody("30", "10"))
 
-	e.app.dashCollect(context.Background(), false)
+	e.app.dashCollect(context.Background(), dashboard.CollectOptions{})
 
 	c, err := status.ReadCache(e.p)
 	if err != nil || len(c.Accounts) != 2 || c.Accounts[1].Name != "work" || !c.WrittenAt.Equal(testNow) {
@@ -150,7 +151,7 @@ func TestDashWithoutTTYFails(t *testing.T) {
 func TestDashDepsCollectReturnsRegistryAccounts(t *testing.T) {
 	e := newCLI(t, "")
 
-	snap := e.app.dashDeps().Collect(context.Background(), false)
+	snap := e.app.dashDeps().Collect(context.Background(), dashboard.CollectOptions{})
 
 	if snap.Err != nil || len(snap.Rows) != 2 || len(snap.Accounts) != 2 || snap.Rows[1].Account != "work" {
 		t.Fatalf("snap=%+v", snap)
@@ -166,7 +167,7 @@ func TestDashCollectFeedsCombinedToday(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	snap := e.app.dashCollect(context.Background(), false)
+	snap := e.app.dashCollect(context.Background(), dashboard.CollectOptions{})
 
 	if snap.Today != snap.Combined.Today || snap.Today.Input != 7 || snap.Today.Output != 9 {
 		t.Fatalf("today=%+v combined=%+v err=%q", snap.Today, snap.Combined.Today, snap.TodayErr)
@@ -275,7 +276,7 @@ func TestDashArgsForBrokenConfigReturnsError(t *testing.T) {
 func TestDashCollectPassesShowDuplicates(t *testing.T) {
 	e := newCLI(t, "")
 
-	snap := e.app.dashCollect(context.Background(), true)
+	snap := e.app.dashCollect(context.Background(), dashboard.CollectOptions{ShowDuplicates: true})
 
 	if snap.Err != nil {
 		t.Fatal(snap.Err)

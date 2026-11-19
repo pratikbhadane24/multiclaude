@@ -61,7 +61,7 @@ func (m Model) onListKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "A":
 		return m.toggleDuplicates()
 	case "r":
-		next, cmd := m.refresh()
+		next, cmd := m.refreshWith(true)
 		return next.withToast("refreshing…"), cmd
 	case "b":
 		return m.launchBest()

@@ -23,11 +23,13 @@ const (
 )
 
 // fetcher builds the usage fetcher; refresh runs `claude auth status`.
+// Accounts signed in as the same login share one request.
 func (a *App) fetcher() usage.Fetcher {
 	return usage.Fetcher{
 		Runner: a.Runner,
 		HTTP:   a.HTTP,
 		Now:    a.Now,
+		Shared: usage.NewSharedFetches(),
 		Refresh: func(ctx context.Context, acct registry.Account) error {
 			return auth.Refresh(ctx, a.Runner, a.Paths, acct)
 		},
@@ -42,10 +44,24 @@ func inspectShared(p paths.Paths, dir string) ([]links.Item, error) {
 	return links.Inspect(p, dir)
 }
 
-func (a *App) statusDeps(accts []registry.Account) status.Deps {
+// cachedFetch is the only way usage is fetched: through the persistent
+// fetch cache (min interval, backoff, last good usage). force skips the
+// min interval but never the backoff.
+func (a *App) cachedFetch(force bool) *status.CachedFetch {
+	return status.NewCachedFetch(a.Paths, a.fetcher().Fetch, a.Now, force)
+}
+
+// warnCacheErr reports a failure to record fetch state.
+func (a *App) warnCacheErr(cf *status.CachedFetch) {
+	if err := cf.Err(); err != nil {
+		a.warnf("usage cache: %v", err)
+	}
+}
+
+func (a *App) statusDeps(accts []registry.Account, cf *status.CachedFetch) status.Deps {
 	return status.Deps{
 		Accounts: accts,
-		Fetch:    a.fetcher().Fetch,
+		Fetch:    cf.Fetch,
 		Today:    tokens.Today,
 		Inspect:  inspectShared,
 		Paths:    a.Paths,
@@ -90,7 +106,7 @@ func memoEmail(lookup func(context.Context, registry.Account) string) func(conte
 	}
 }
 
-const statusUsage = "status [--json] [--all] [--watch d] [--refresh-cache]"
+const statusUsage = "status [--json] [--all] [--refresh] [--watch d] [--refresh-cache]"
 
 // cmdStatus handles `ccm status [--json] [--watch d]`.
 func (a *App) cmdStatus(ctx context.Context, args []string) int {
@@ -99,6 +115,7 @@ func (a *App) cmdStatus(ctx context.Context, args []string) int {
 	watch := fs.Duration("watch", 0, "refresh every interval (e.g. 30s)")
 	showAll := fs.Bool("all", false, "also list accounts that share a login as separate rows")
 	refreshCache := fs.Bool("refresh-cache", false, "update the status line cache quietly")
+	force := fs.Bool("refresh", false, "fetch now even if the cached usage is recent (never during a rate-limit backoff)")
 	if _, code, ok := a.parseArgs(fs, withWatchDefault(args), 0, statusUsage); !ok {
 		return code
 	}
@@ -114,7 +131,8 @@ func (a *App) cmdStatus(ctx context.Context, args []string) int {
 	if err != nil {
 		return a.errorf("%v", err)
 	}
-	d := a.statusDeps(accts)
+	cf := a.cachedFetch(*force)
+	d := a.statusDeps(accts, cf)
 	d.ShowDuplicates = *showAll
 	if *refreshCache {
 		d = cheapDeps(d)
@@ -123,6 +141,7 @@ func (a *App) cmdStatus(ctx context.Context, args []string) int {
 		return a.watchStatus(ctx, d, *watch)
 	}
 	rows, combined := status.Collect(ctx, d)
+	a.warnCacheErr(cf)
 	if code, done := a.finishStatusCache(rows, combined, *refreshCache); done {
 		return code
 	}
@@ -157,7 +176,9 @@ func withWatchDefault(args []string) []string {
 	return out
 }
 
-// watchStatus re-renders every interval until ctx is cancelled.
+// watchStatus re-renders every interval until ctx is cancelled. Each step
+// fetches through a fresh cache wrapper, so recent results are reused and
+// failing accounts back off.
 func (a *App) watchStatus(ctx context.Context, d status.Deps, interval time.Duration) int {
 	if interval <= 0 {
 		interval = defaultWatch
@@ -165,15 +186,17 @@ func (a *App) watchStatus(ctx context.Context, d status.Deps, interval time.Dura
 	if d.EmailFallback != nil {
 		d.EmailFallback = memoEmail(d.EmailFallback)
 	}
-	w := status.NewWatcher(a.Now)
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
-		rows, combined := w.Step(ctx, d)
+		cf := a.cachedFetch(false)
+		d.Fetch = cf.Fetch
+		rows, combined := status.Collect(ctx, d)
 		if ctx.Err() != nil {
 			return ExitOK
 		}
 		a.printf("%s%s", clearScreen, status.Render(rows, combined, a.Now()))
+		a.warnCacheErr(cf)
 		select {
 		case <-ctx.Done():
 			return ExitOK

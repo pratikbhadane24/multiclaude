@@ -31,6 +31,8 @@ type recorder struct {
 	snap     Snapshot
 	// shows records the showDuplicates flag of every collect.
 	shows []bool
+	// forces records the Force flag of every collect.
+	forces []bool
 	// launchWarn is returned as Launch's config warning.
 	launchWarn string
 }
@@ -71,11 +73,12 @@ func twoAccountSnapshot() Snapshot {
 
 func newTestDeps(r *recorder) Deps {
 	return Deps{
-		Collect: func(_ context.Context, showDuplicates bool) Snapshot {
+		Collect: func(_ context.Context, o CollectOptions) Snapshot {
 			r.mu.Lock()
 			defer r.mu.Unlock()
 			r.collects++
-			r.shows = append(r.shows, showDuplicates)
+			r.shows = append(r.shows, o.ShowDuplicates)
+			r.forces = append(r.forces, o.Force)
 			return r.snap
 		},
 		Launch: func(name string, extra []string) (*exec.Cmd, string, error) {
