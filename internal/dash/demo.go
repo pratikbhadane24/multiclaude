@@ -20,12 +20,13 @@ func Demo(d Deps) Deps {
 	d = withDefaults(d)
 	now := d.Now
 	d.Collect = func(context.Context) Snapshot { return demoSnapshot(now()) }
-	d.Launch = func(name string) (*exec.Cmd, error) {
+	d.Launch = func(name string, _ []string) (*exec.Cmd, error) {
 		return exec.Command(demoEcho, "demo: would run claude as", name), nil
 	}
 	d.Self = func(args ...string) *exec.Cmd {
 		return exec.Command(demoEcho, append([]string{"demo: would run ccm"}, args...)...)
 	}
+	d.LatestSession = func() (string, error) { return "demo-session", nil }
 	d.Run = func(context.Context, string, []string) error { return nil }
 	d.Doctor = func(context.Context) []doctor.Check { return demoChecks() }
 	d.Sync = func(context.Context) (string, error) { return "work: up to date\nside: up to date\n", nil }
@@ -51,16 +52,16 @@ func demoSnapshot(now time.Time) Snapshot {
 		demoRow("main", "me@example.com", "max", usage.StateOK, &usage.Usage{
 			FiveHour: demoWindow(42, now, 2*time.Hour+10*time.Minute),
 			SevenDay: demoWindow(63, now, 3*24*time.Hour),
-		}, tokens.Tokens{Input: 18_400, Output: 52_100, CacheRead: 3_400_000, CacheWrite: 210_000}),
+		}),
 		demoRow("work", "me@work.example", "max", usage.StateOK, &usage.Usage{
 			FiveHour: demoWindow(8, now, 4*time.Hour),
 			SevenDay: demoWindow(21, now, 5*24*time.Hour),
-		}, tokens.Tokens{Input: 2_100, Output: 9_800, CacheRead: 450_000, CacheWrite: 31_000}),
+		}),
 		demoRow("side", "side@example.com", "pro", usage.StateOK, &usage.Usage{
 			FiveHour: demoWindow(100, now, 47*time.Minute),
 			SevenDay: demoWindow(92, now, 26*time.Hour),
-		}, tokens.Tokens{}),
-		demoRow("old", "old@example.com", "", usage.StateLoggedOut, nil, tokens.Tokens{}),
+		}),
+		demoRow("old", "old@example.com", "", usage.StateLoggedOut, nil),
 	}
 	accts := []registry.Account{
 		{Name: "main"},
@@ -72,14 +73,13 @@ func demoSnapshot(now time.Time) Snapshot {
 	for i, r := range rows {
 		list[i] = r.AccountUsage
 	}
-	return Snapshot{Rows: rows, Combined: usage.Aggregate(list), Accounts: accts}
+	combined := usage.Aggregate(list)
+	combined.Today = tokens.Tokens{Input: 20_500, Output: 61_900, CacheRead: 3_850_000, CacheWrite: 241_000}
+	return Snapshot{Rows: rows, Combined: combined, Accounts: accts, Today: combined.Today}
 }
 
-func demoRow(name, email, plan string, st usage.State, u *usage.Usage, t tokens.Tokens) status.Row {
-	return status.Row{
-		AccountUsage: usage.AccountUsage{Account: name, Email: email, Plan: plan, State: st, Usage: u},
-		Today:        t,
-	}
+func demoRow(name, email, plan string, st usage.State, u *usage.Usage) status.Row {
+	return status.Row{AccountUsage: usage.AccountUsage{Account: name, Email: email, Plan: plan, State: st, Usage: u}}
 }
 
 func demoChecks() []doctor.Check {

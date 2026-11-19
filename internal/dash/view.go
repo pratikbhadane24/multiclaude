@@ -145,6 +145,8 @@ func (m Model) statusLine() string {
 		return styleBold.Render("New account name: ") + m.input.View() + styleDim.Render("  ⏎ next · esc cancel")
 	case modeAddEmail:
 		return styleBold.Render("Email for "+m.addName+": ") + m.input.View() + styleDim.Render("  ⏎ add · esc cancel")
+	case modeConfirm:
+		return styleWarn.Bold(true).Render(m.prompt.text)
 	}
 	if m.snap.Err != nil {
 		return styleBad.Render("error: " + m.snap.Err.Error())
@@ -158,8 +160,11 @@ func (m Model) footerLines() []string {
 	for _, k := range keyHelp {
 		hints = append(hints, styleKey.Render(k.key)+" "+k.label)
 	}
-	if m.mode == modeDoctor || m.mode == modeHelp {
+	switch m.mode {
+	case modeDoctor, modeHelp:
 		hints = []string{styleKey.Render("↑↓") + " scroll", styleKey.Render("esc") + " close"}
+	case modeConfirm:
+		hints = []string{styleKey.Render("y") + " yes", styleKey.Render("n") + " no", styleKey.Render("esc") + " cancel"}
 	}
 	var lines []string
 	cur := ""

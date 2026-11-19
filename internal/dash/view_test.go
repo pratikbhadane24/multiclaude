@@ -21,7 +21,7 @@ func TestViewSnapshotTwoAccounts(t *testing.T) {
 		"main", "work", "m@x.com", "w@x.com",
 		"██", "25%", "10%",
 		"⚠ skip-permissions",
-		"1.2k/3.4k", "2.0M",
+		"today (all accounts)",
 		"⏎ launch", "b best", "n new window", "l login", "a add", "d doctor",
 		"s sync", "t t3-sync", "r refresh", "? help", "q quit",
 	} {

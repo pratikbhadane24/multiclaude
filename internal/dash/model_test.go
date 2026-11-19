@@ -296,7 +296,7 @@ func TestProgramQuitsCleanly(t *testing.T) {
 
 func TestLaunchErrorToasts(t *testing.T) {
 	m, r := newLoaded(t)
-	m.deps.Launch = func(string) (*exec.Cmd, error) { return nil, errors.New("unknown account") }
+	m.deps.Launch = func(string, []string) (*exec.Cmd, error) { return nil, errors.New("unknown account") }
 
 	m, cmd := press(t, m, "enter")
 

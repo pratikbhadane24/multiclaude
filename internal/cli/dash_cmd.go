@@ -13,7 +13,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/term"
 
-	"multiclaude/internal/auth"
 	dashboard "multiclaude/internal/dash"
 	"multiclaude/internal/doctor"
 	"multiclaude/internal/registry"
@@ -22,11 +21,6 @@ import (
 
 // demoEnv, when "1", makes the dashboard show canned data (screenshots, smoke tests).
 const demoEnv = "CCM_DASH_DEMO"
-
-// dashArgsFor returns the merged launch args (config defaults + account args)
-// for an interactive launch from the dashboard.
-// TODO(P1): return the merged config args here once internal/config lands.
-var dashArgsFor = func(_ *App, _ string) []string { return nil }
 
 // isTerminal reports whether v is an *os.File attached to a terminal.
 func isTerminal(v any) bool {
@@ -61,48 +55,35 @@ func (a *App) cmdDash(ctx context.Context, args []string) int {
 	return ExitOK
 }
 
-// LaunchCmd builds the command `ccm <name>` runs: claude as that account with
-// its merged launch args. Stdio is left unset for tea.ExecProcess to wire.
-func (a *App) LaunchCmd(name string) (*exec.Cmd, error) {
-	accts, err := registry.Load(a.Paths)
-	if err != nil {
-		return nil, err
-	}
-	acct, ok := registry.Find(accts, name)
-	if !ok {
-		return nil, fmt.Errorf("unknown account %q", name)
-	}
-	// P1 wires config args here via ArgsFor (dashArgsFor).
-	c := exec.Command(auth.Binary(a.Paths), dashArgsFor(a, name)...)
-	c.Env = auth.Env(acct, os.Environ())
-	return c, nil
-}
-
 func (a *App) dashDeps() dashboard.Deps {
 	return dashboard.Deps{
-		Collect:  a.dashCollect,
-		Launch:   a.LaunchCmd,
-		Self:     a.selfCmd,
-		SelfPath: a.selfPath(),
-		Run:      a.runQuiet,
-		Doctor:   a.dashDoctor,
-		Sync:     a.captured((*App).cmdSync),
-		T3Sync:   a.captured((*App).cmdT3Sync),
-		ArgsFor:  func(name string) []string { return dashArgsFor(a, name) },
-		Now:      a.Now,
+		Collect: a.dashCollect,
+		Launch:  a.LaunchCmd,
+
+		LatestSession: a.dashLatestSession,
+		Self:          a.selfCmd,
+		SelfPath:      a.selfPath(),
+		Run:           a.runQuiet,
+		Doctor:        a.dashDoctor,
+		Sync:          a.captured((*App).cmdSync),
+		T3Sync:        a.captured((*App).cmdT3Sync),
+		ArgsFor:       a.dashArgsFor,
+		Now:           a.Now,
 	}
 }
 
 // dashCollect re-reads the registry (accounts may have been added) and
-// collects usage the same way `ccm status` does.
-// TODO(P2): write the status cache here once status.WriteCache exists.
+// collects usage the same way `ccm status` does, including writing the
+// status line's usage cache (a failed write is reported in the snapshot).
 func (a *App) dashCollect(ctx context.Context) dashboard.Snapshot {
 	accts, err := registry.Load(a.Paths)
 	if err != nil {
 		return dashboard.Snapshot{Err: err}
 	}
 	rows, combined := status.Collect(ctx, a.statusDeps(accts))
-	return dashboard.Snapshot{Rows: rows, Combined: combined, Accounts: accts}
+	cacheErr := status.WriteCache(a.Paths, rows, combined, a.Now())
+	return dashboard.Snapshot{Rows: rows, Combined: combined, Accounts: accts,
+		Today: combined.Today, TodayErr: combined.TodayErr, CacheErr: cacheErr}
 }
 
 func (a *App) dashDoctor(ctx context.Context) []doctor.Check {

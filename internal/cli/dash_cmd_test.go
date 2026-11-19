@@ -3,13 +3,17 @@ package cli
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
+	"multiclaude/internal/config"
 	"multiclaude/internal/doctor"
 	"multiclaude/internal/run"
+	"multiclaude/internal/status"
 )
 
 func envValue(env []string, key string) (string, bool) {
@@ -25,11 +29,11 @@ func TestLaunchCmdSetsConfigDirOnlyForNonMain(t *testing.T) {
 	e := newCLI(t, "")
 	t.Setenv("CLAUDE_CONFIG_DIR", "/stale")
 
-	work, err := e.app.LaunchCmd("work")
+	work, err := e.app.LaunchCmd("work", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	main, err := e.app.LaunchCmd("main")
+	main, err := e.app.LaunchCmd("main", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,23 +49,65 @@ func TestLaunchCmdSetsConfigDirOnlyForNonMain(t *testing.T) {
 	}
 }
 
-func TestLaunchCmdAppendsArgsFor(t *testing.T) {
+func TestLaunchCmdUsesConfigArgsThenExtra(t *testing.T) {
 	e := newCLI(t, "")
-	orig := dashArgsFor
-	t.Cleanup(func() { dashArgsFor = orig })
-	dashArgsFor = func(_ *App, name string) []string { return []string{"--model", name} }
+	e.setConfig(t, config.Config{DefaultArgs: []string{"--model", "opus"},
+		Accounts: map[string]config.AccountConfig{"work": {Args: []string{"--verbose"}}}})
 
-	c, err := e.app.LaunchCmd("work")
+	c, err := e.app.LaunchCmd("work", []string{"--resume", "s1"})
 
-	if err != nil || !reflect.DeepEqual(c.Args[1:], []string{"--model", "work"}) {
+	want := []string{"--model", "opus", "--verbose", "--resume", "s1"}
+	if err != nil || !reflect.DeepEqual(c.Args[1:], want) {
 		t.Fatalf("args=%q err=%v", c.Args, err)
+	}
+}
+
+func TestCcmNameAndDashboardEnterLaunchIdentically(t *testing.T) {
+	e := newCLI(t, "")
+	e.setConfig(t, config.Config{DefaultArgs: []string{"--dangerously-skip-permissions", "--x", "a b"},
+		Accounts: map[string]config.AccountConfig{"work": {Args: []string{"--model", "it's"}}}})
+
+	if code := e.main("work"); code != ExitOK {
+		t.Fatalf("code=%d err=%s", code, e.err)
+	}
+	c, err := e.app.LaunchCmd("work", nil)
+
+	calls := e.callsTo(e.p.RealClaude)
+	if err != nil || len(calls) != 1 {
+		t.Fatalf("err=%v calls=%v", err, e.fake.Calls)
+	}
+	if c.Path != calls[0].Name || !reflect.DeepEqual(c.Args[1:], calls[0].Args) || !reflect.DeepEqual(c.Env, calls[0].Env) {
+		t.Fatalf("dash=%q %q\nccm=%q %q", c.Path, c.Args, calls[0].Name, calls[0].Args)
+	}
+}
+
+func TestDashArgsForUsesConfig(t *testing.T) {
+	e := newCLI(t, "")
+	e.setConfig(t, config.Config{DefaultArgs: []string{"--dangerously-skip-permissions"}})
+
+	got := e.app.dashDeps().ArgsFor("work")
+
+	if !reflect.DeepEqual(got, []string{"--dangerously-skip-permissions"}) {
+		t.Fatalf("args=%q", got)
+	}
+}
+
+func TestDashCollectWritesUsageCache(t *testing.T) {
+	e := newCLI(t, "")
+	e.loginWithUsage(e.workDir, usageBody("30", "10"))
+
+	e.app.dashCollect(context.Background())
+
+	c, err := status.ReadCache(e.p)
+	if err != nil || len(c.Accounts) != 2 || c.Accounts[1].Name != "work" || !c.WrittenAt.Equal(testNow) {
+		t.Fatalf("cache=%+v err=%v", c, err)
 	}
 }
 
 func TestLaunchCmdUnknownAccount(t *testing.T) {
 	e := newCLI(t, "")
 
-	if _, err := e.app.LaunchCmd("nope"); err == nil || !strings.Contains(err.Error(), `unknown account "nope"`) {
+	if _, err := e.app.LaunchCmd("nope", nil); err == nil || !strings.Contains(err.Error(), `unknown account "nope"`) {
 		t.Fatalf("err=%v", err)
 	}
 }
@@ -108,6 +154,22 @@ func TestDashDepsCollectReturnsRegistryAccounts(t *testing.T) {
 
 	if snap.Err != nil || len(snap.Rows) != 2 || len(snap.Accounts) != 2 || snap.Rows[1].Account != "work" {
 		t.Fatalf("snap=%+v", snap)
+	}
+}
+
+func TestDashCollectFeedsCombinedToday(t *testing.T) {
+	e := newCLI(t, "")
+	file := filepath.Join(e.p.ClaudeDir, "projects", "p", "s.jsonl")
+	mustWrite(t, file, `{"type":"assistant","timestamp":"`+testNow.Format(time.RFC3339)+
+		`","message":{"id":"m1","usage":{"input_tokens":7,"output_tokens":9}}}`+"\n")
+	if err := os.Chtimes(file, testNow, testNow); err != nil {
+		t.Fatal(err)
+	}
+
+	snap := e.app.dashCollect(context.Background())
+
+	if snap.Today != snap.Combined.Today || snap.Today.Input != 7 || snap.Today.Output != 9 {
+		t.Fatalf("today=%+v combined=%+v err=%q", snap.Today, snap.Combined.Today, snap.TodayErr)
 	}
 }
 

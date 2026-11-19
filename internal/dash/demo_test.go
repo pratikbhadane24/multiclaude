@@ -14,7 +14,7 @@ func TestDemoReplacesEverySideEffect(t *testing.T) {
 	ctx := context.Background()
 
 	snap := d.Collect(ctx)
-	c, err := d.Launch("main")
+	c, err := d.Launch("main", nil)
 	d.Doctor(ctx)
 	_ = d.Run(ctx, "/usr/bin/osascript", nil)
 	self := d.Self("login", "work")

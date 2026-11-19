@@ -53,7 +53,7 @@ func (m Model) detailLines() []string {
 		joinNonEmpty(title),
 		"state " + st.Render(state) + sep + styleDim.Render("refreshed "+age(now, m.lastRefresh)+" ago"),
 		"5h " + windowText(fiveUsed(r), resetAt(r, true), now) + sep + "7d " + windowText(sevenUsed(r), resetAt(r, false), now),
-		todayDetail(r),
+		m.todayDetail(),
 		"launch args " + argsText(m.deps.ArgsFor(r.Account)),
 		"health " + m.healthText(r.Account),
 	}
@@ -83,12 +83,15 @@ func windowText(p *float64, reset *time.Time, now time.Time) string {
 	return usageStyle(p).Render(status.FormatPct(p)+" used") + ", resets " + resetIn(reset, now)
 }
 
-func todayDetail(r status.Row) string {
-	if r.TodayErr != "" {
-		return "today " + styleBad.Render("error: "+r.TodayErr)
+// todayDetail is today's combined token use: history is shared by every
+// account, so there is no per-account figure.
+func (m Model) todayDetail() string {
+	const label = "today (all accounts) "
+	if m.snap.TodayErr != "" {
+		return label + styleBad.Render("error: "+m.snap.TodayErr)
 	}
-	t := r.Today
-	return "today in " + status.FormatTokens(t.Input) + sep + "out " + status.FormatTokens(t.Output) +
+	t := m.snap.Today
+	return label + "in " + status.FormatTokens(t.Input) + sep + "out " + status.FormatTokens(t.Output) +
 		sep + "cache read " + status.FormatTokens(t.CacheRead) + sep + "cache write " + status.FormatTokens(t.CacheWrite)
 }
 

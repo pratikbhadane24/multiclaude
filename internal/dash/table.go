@@ -20,8 +20,6 @@ const (
 	// barColSuffix is the room for " 100%" after a bar.
 	barColSuffix = 5
 	resetWidth   = 8
-	todayWidth   = 13
-	cacheWidth   = 6
 	stateWidth   = 10
 	markerText   = "› "
 	bestText     = "★"
@@ -89,8 +87,6 @@ func (m Model) columns() []column {
 		{"5H USED", m.barWidth() + barColSuffix, 1, pctCell(fiveUsed)},
 		{"7D USED", m.barWidth() + barColSuffix, 2, pctCell(sevenUsed)},
 		{"5H RESET", resetWidth, 4, resetCell},
-		{"TODAY IN/OUT", todayWidth, 6, todayCell},
-		{"CACHE", cacheWidth, 7, cacheCell},
 		{"STATE", stateWidth, 3, func(r status.Row, _ Model) (string, lipgloss.Style) { return stateLabel(r) }},
 	}
 }
@@ -107,26 +103,6 @@ func resetCell(r status.Row, m Model) (string, lipgloss.Style) {
 		return "-", styleDim
 	}
 	return status.FormatDuration(r.Usage.FiveHour.ResetsAt.Sub(m.deps.Now())), plain
-}
-
-func todayCell(r status.Row, _ Model) (string, lipgloss.Style) {
-	if r.TodayErr != "" {
-		return "err", styleBad
-	}
-	if emptyTokens(r.Today) {
-		return "-", styleDim
-	}
-	return status.FormatTokens(r.Today.Input) + "/" + status.FormatTokens(r.Today.Output), plain
-}
-
-func cacheCell(r status.Row, _ Model) (string, lipgloss.Style) {
-	if r.TodayErr != "" {
-		return "err", styleBad
-	}
-	if emptyTokens(r.Today) {
-		return "-", styleDim
-	}
-	return status.FormatTokens(r.Today.CacheRead + r.Today.CacheWrite), styleDim
 }
 
 // fitColumns keeps columns in priority order until the next one would not

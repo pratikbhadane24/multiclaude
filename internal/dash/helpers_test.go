@@ -12,7 +12,6 @@ import (
 	"multiclaude/internal/doctor"
 	"multiclaude/internal/registry"
 	"multiclaude/internal/status"
-	"multiclaude/internal/tokens"
 	"multiclaude/internal/usage"
 )
 
@@ -55,8 +54,7 @@ func twoAccountSnapshot() Snapshot {
 			Usage: &usage.Usage{
 				FiveHour: usage.Window{UsedPct: pct(25), ResetsAt: at(time.Hour)},
 				SevenDay: usage.Window{UsedPct: pct(50), ResetsAt: at(72 * time.Hour)},
-			}},
-			Today: tokens.Tokens{Input: 1200, Output: 3400, CacheRead: 2_000_000, CacheWrite: 5000}},
+			}}},
 		{AccountUsage: usage.AccountUsage{Account: "work", Email: "w@x.com", Plan: "pro", State: usage.StateOK,
 			Usage: &usage.Usage{
 				FiveHour: usage.Window{UsedPct: pct(10), ResetsAt: at(2 * time.Hour)},
@@ -75,11 +73,11 @@ func newTestDeps(r *recorder) Deps {
 			r.collects++
 			return r.snap
 		},
-		Launch: func(name string) (*exec.Cmd, error) {
+		Launch: func(name string, extra []string) (*exec.Cmd, error) {
 			r.mu.Lock()
 			defer r.mu.Unlock()
 			r.launched = append(r.launched, name)
-			return exec.Command("/bin/claude-fake", name), nil
+			return exec.Command("/bin/claude-fake", append([]string{name}, extra...)...), nil
 		},
 		Self:     func(args ...string) *exec.Cmd { return exec.Command("/opt/ccm", args...) },
 		SelfPath: "/opt/ccm",
