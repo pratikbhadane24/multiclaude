@@ -36,7 +36,8 @@ func TestAggregateOverUsedClampedAndNilSkipped(t *testing.T) {
 		au("a", StateExpiredRefreshed, f64(130), nil, nil),
 		{Account: "n", State: StateOK},
 	})
-	if got.FiveHourLeft != 0 || got.SevenDayLeft != 0 || got.AvailableNow != 0 || got.NextResetAt != nil {
+	// seven_day is nil: idle, fully free; five_hour over-used clamps to 0.
+	if got.FiveHourLeft != 0 || got.SevenDayLeft != 1 || got.AvailableNow != 0 || got.NextResetAt != nil {
 		t.Fatalf("got %+v", got)
 	}
 }

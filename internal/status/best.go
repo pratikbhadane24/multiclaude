@@ -4,16 +4,14 @@ import "multiclaude/internal/usage"
 
 const fullPct = 100.0
 
-// headroom returns the smaller remaining percentage across known windows;
-// ok is false when no window is known or any known window is exhausted.
+// headroom returns the smaller remaining percentage across windows (an idle,
+// nil window is fully free); ok is false when any window is exhausted.
 func headroom(u *usage.Usage) (left float64, ok bool) {
 	left = fullPct
-	known := false
 	for _, w := range []usage.Window{u.FiveHour, u.SevenDay} {
 		if w.UsedPct == nil {
-			continue
+			continue // idle: fully free
 		}
-		known = true
 		l := fullPct - *w.UsedPct
 		if l <= 0 {
 			return 0, false
@@ -22,14 +20,15 @@ func headroom(u *usage.Usage) (left float64, ok bool) {
 			left = l
 		}
 	}
-	return left, known
+	return left, true
 }
 
 // PickBest returns the usable account with the most headroom (ties: first).
+// A duplicate of an earlier login is never returned.
 func PickBest(list []usage.AccountUsage) (usage.AccountUsage, bool) {
 	var best usage.AccountUsage
 	bestLeft, found := 0.0, false
-	for _, a := range list {
+	for _, a := range usage.Distinct(list) {
 		if a.Usage == nil || (a.State != usage.StateOK && a.State != usage.StateExpiredRefreshed) {
 			continue
 		}

@@ -66,17 +66,35 @@ func toCacheAccount(r Row) CacheAccount {
 	return ca
 }
 
-// WriteCache atomically writes the usage snapshot (dir 0700, file 0600).
-func WriteCache(p paths.Paths, rows []Row, c usage.Combined, now time.Time) error {
+// buildCache assembles the snapshot. A merged duplicate login gets its own
+// entry (same usage, its own name) so the status line finds every account.
+func buildCache(rows []Row, c usage.Combined, now time.Time) Cache {
 	cache := Cache{
 		WrittenAt: now.UTC(),
-		Accounts:  make([]CacheAccount, len(rows)),
+		Accounts:  make([]CacheAccount, 0, len(rows)),
 		Combined:  CacheCombined{c.FiveHourLeft, c.SevenDayLeft, c.Counted, c.AvailableNow, c.NextResetAt},
 	}
-	for i, r := range rows {
-		cache.Accounts[i] = toCacheAccount(r)
+	listed := map[string]bool{}
+	for _, r := range rows {
+		listed[r.Account] = true
 	}
-	data, err := json.Marshal(cache)
+	for _, r := range rows {
+		ca := toCacheAccount(r)
+		cache.Accounts = append(cache.Accounts, ca)
+		for _, alias := range r.Aliases {
+			if !listed[alias] {
+				dup := ca
+				dup.Name = alias
+				cache.Accounts = append(cache.Accounts, dup)
+			}
+		}
+	}
+	return cache
+}
+
+// WriteCache atomically writes the usage snapshot (dir 0700, file 0600).
+func WriteCache(p paths.Paths, rows []Row, c usage.Combined, now time.Time) error {
+	data, err := json.Marshal(buildCache(rows, c, now))
 	if err != nil {
 		return fmt.Errorf("encode usage cache: %w", err)
 	}

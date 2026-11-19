@@ -127,6 +127,9 @@ type AccountUsage struct {
 	State                State
 	Err                  string
 	Usage                *Usage
+	// AccountUUID identifies the login behind the credentials; used only to
+	// detect two accounts signed in as the same user. Never printed.
+	AccountUUID string
 }
 
 // Fetcher fetches usage for accounts.
@@ -234,14 +237,14 @@ func (f Fetcher) Fetch(ctx context.Context, a registry.Account) AccountUsage {
 		}
 		refreshed = true
 	}
-	res.Plan = creds.SubscriptionType
+	res.Plan, res.AccountUUID = creds.SubscriptionType, creds.AccountUUID
 	code, body, err := f.get(ctx, creds.AccessToken)
 	if err == nil && code == http.StatusUnauthorized && !refreshed {
 		if creds, res, ok = f.refreshAndRead(ctx, a, res); !ok {
 			return res
 		}
 		refreshed = true
-		res.Plan = creds.SubscriptionType
+		res.Plan, res.AccountUUID = creds.SubscriptionType, creds.AccountUUID
 		code, body, err = f.get(ctx, creds.AccessToken)
 	}
 	return finish(res, refreshed, code, body, err)
