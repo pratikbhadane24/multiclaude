@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -85,16 +86,28 @@ func Today(projectsDir string, now time.Time) (Tokens, error) {
 
 func scanFile(path string, now time.Time, keyed map[string]Tokens, unkeyed *Tokens) error {
 	f, err := os.Open(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
 	if err != nil {
 		return fmt.Errorf("open %s: %w", path, err)
 	}
 	defer f.Close()
 
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 0, initialBufSize), maxLineBytes)
-	for sc.Scan() {
-		key, tk, ok := parseLine(sc.Bytes(), now)
+	r := bufio.NewReaderSize(f, initialBufSize)
+	for {
+		raw, ok, err := readLine(r)
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("read %s: %w", path, err)
+		}
 		if !ok {
+			continue
+		}
+		key, tk, counts := parseLine(raw, now)
+		if !counts {
 			continue
 		}
 		if key == "" {
@@ -103,10 +116,28 @@ func scanFile(path string, now time.Time, keyed map[string]Tokens, unkeyed *Toke
 		}
 		keyed[key] = keyed[key].max(tk)
 	}
-	if err := sc.Err(); err != nil {
-		return fmt.Errorf("scan %s: %w", path, err)
+}
+
+// readLine reads one line; ok is false when the line exceeded maxLineBytes
+// and was skipped (the rest of it is consumed so later lines still count).
+func readLine(r *bufio.Reader) (line []byte, ok bool, err error) {
+	var buf []byte
+	tooLong := false
+	for {
+		chunk, isPrefix, err := r.ReadLine()
+		if err != nil {
+			return nil, false, err
+		}
+		if !tooLong {
+			buf = append(buf, chunk...)
+			if len(buf) > maxLineBytes {
+				tooLong, buf = true, nil
+			}
+		}
+		if !isPrefix {
+			return buf, !tooLong, nil
+		}
 	}
-	return nil
 }
 
 // parseLine returns the dedupe key ("" if none), usage, and whether the line counts.

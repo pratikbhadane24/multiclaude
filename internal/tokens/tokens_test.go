@@ -100,3 +100,37 @@ func TestTodayMissingDir(t *testing.T) {
 		t.Fatalf("got %+v, %v", got, err)
 	}
 }
+
+func TestTodaySkipsOversizedLineAndKeepsLaterLines(t *testing.T) {
+	dir := t.TempDir()
+	huge := `{"type":"user","x":"` + strings.Repeat("a", maxLineBytes+10) + `"}`
+	writeTranscript(t, dir, "p/a.jsonl", testNow,
+		line(todayTS, "m", "a", "r", 1, 2, 3, 4),
+		huge,
+		line(todayTS, "m", "b", "r", 10, 20, 30, 40))
+	got, err := Today(dir, testNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := Tokens{Input: 11, Output: 22, CacheRead: 33, CacheWrite: 44}
+	if got != want {
+		t.Fatalf("got %+v want %+v", got, want)
+	}
+}
+
+func TestTodayUsesNowLocationForCalendarDay(t *testing.T) {
+	dir := t.TempDir()
+	loc := time.FixedZone("UTC+10", 10*60*60)
+	now := time.Date(2026, 11, 19, 8, 0, 0, 0, loc)
+	writeTranscript(t, dir, "p/a.jsonl", now,
+		line("2026-11-18T20:00:00.000Z", "m", "a", "r", 1, 1, 1, 1),
+		line("2026-11-18T13:00:00.000Z", "m", "b", "r", 5, 5, 5, 5))
+	got, err := Today(dir, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := Tokens{Input: 1, Output: 1, CacheRead: 1, CacheWrite: 1}
+	if got != want {
+		t.Fatalf("got %+v want %+v", got, want)
+	}
+}
