@@ -15,20 +15,33 @@ func sameLogin(a, b AccountUsage) bool {
 	return a.Email != "" && strings.EqualFold(a.Email, b.Email)
 }
 
-// CanonicalIndex maps every row to the index of its canonical row: the first
-// row in list order that is the same login. A row that is its own canonical
+// CanonicalIndex maps every row to the index of its canonical row. Rows that
+// are the same login form a group; its canonical row is the first usable
+// (ok/expired-refreshed) member, else the first member, so a failing earlier
+// account never hides a healthy duplicate. A row that is its own canonical
 // maps to itself. It is recomputed on every call, so duplicates split as soon
 // as the underlying logins differ.
 func CanonicalIndex(list []AccountUsage) []int {
-	out := make([]int, len(list))
+	root := make([]int, len(list))
 	for i := range list {
-		out[i] = i
+		root[i] = i
 		for j := 0; j < i; j++ {
-			if out[j] == j && sameLogin(list[j], list[i]) {
-				out[i] = j
+			if root[j] == j && sameLogin(list[j], list[i]) {
+				root[i] = j
 				break
 			}
 		}
+	}
+	best := map[int]int{} // group root -> canonical index
+	for i, r := range root {
+		cur, seen := best[r]
+		if !seen || (!countable(list[cur].State) && countable(list[i].State)) {
+			best[r] = i
+		}
+	}
+	out := make([]int, len(list))
+	for i, r := range root {
+		out[i] = best[r]
 	}
 	return out
 }

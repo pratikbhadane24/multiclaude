@@ -57,8 +57,9 @@ func (a *App) doctorDeps(accts []registry.Account) doctor.Deps {
 // loginIdentity returns the keychain account UUID and the email of an
 // account's login; either is "" when unknown. The UUID is never printed.
 func (a *App) loginIdentity(ctx context.Context, acct registry.Account) (uuid, email string) {
-	if c, err := keychain.Read(ctx, a.Runner, acct); err == nil && c != nil {
-		uuid = c.AccountUUID
+	c, err := keychain.Read(ctx, a.Runner, acct)
+	if err != nil || c == nil {
+		return "", "" // logged out: no login to merge
 	}
-	return uuid, a.knownEmail(ctx, acct)
+	return c.AccountUUID, a.knownEmail(ctx, acct)
 }

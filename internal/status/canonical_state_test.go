@@ -1,0 +1,17 @@
+package status
+
+import (
+	"testing"
+
+	"multiclaude/internal/usage"
+)
+
+func TestPickBestReturnsHealthyDuplicateOfErroredAccount(t *testing.T) {
+	bad := usage.AccountUsage{Account: "main", Email: "a@x.io", State: usage.StateAPIError}
+	good := ok("admin", f(10), f(10), nil)
+	good.Email = "a@x.io"
+	got, found := PickBest([]usage.AccountUsage{bad, good})
+	if !found || got.Account != "admin" {
+		t.Fatalf("%v %v", got, found)
+	}
+}
