@@ -76,7 +76,7 @@ Chosen: **A**. The user delegated the choice. A is the only option with parallel
 
 ### `ccm` CLI
 
-Bun + TypeScript (Bun already installed), single entry `bin/ccm`, small modules. Installed by symlinking into `~/.local/bin/ccm`.
+Go (user decision 2026-11-19, replacing Bun/TS): native `ccm` binary + native shim binary, stdlib only. Installed via `ccm install` (symlink into `~/.local/bin/ccm`).
 
 | Command | Behavior |
 |---|---|
@@ -132,7 +132,7 @@ Each external step (Keychain, CLI, HTTP, file write) is reported with an actiona
 
 ### Testing
 
-TDD with `bun test`, target 80%+: pure units (service-name hash, usage parsing/aggregation, T3 settings merge, registry), integration with mocked `security`/`claude`/HTTP via injected runners, and one manual E2E checklist (add account, parallel sessions, status, T3 sync).
+TDD with `go test`, target 80%+: pure units (service-name hash, usage parsing/aggregation, T3 settings merge, registry), integration with mocked `security`/`claude`/HTTP via injected runners, and one manual E2E checklist (add account, parallel sessions, status, T3 sync).
 
 ## Decisions from builder check (Claude's calls, user delegated)
 

@@ -1,254 +1,206 @@
-# multiclaude (`ccm`) Implementation Plan
+# multiclaude (`ccm`) Implementation Plan — Go
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** A `ccm` CLI plus launcher shim to run multiple Claude Code OAuth accounts in parallel, share one setup (including MCP servers), show per-account and combined plan limits, and expose every account as a T3 Code instance.
+**Goal:** A `ccm` CLI plus a native launcher shim to run multiple Claude Code OAuth accounts in parallel, share one setup (including MCP servers), show per-account and combined plan limits, and expose every account as a T3 Code instance.
 
-**Architecture:** Each account is a `CLAUDE_CONFIG_DIR` under `~/.claude-accounts/<name>`. Shared items are symlinked to `~/.claude`. A shim at `~/.claude-accounts/bin/claude` syncs MCP servers, then execs the real `claude`. `ccm` modules are small and pure where possible. Side effects (subprocess, fs, fetch, clock) are injected so they can be tested.
+**Architecture:** Each account is a `CLAUDE_CONFIG_DIR` under `~/.claude-accounts/<name>`. Shared items are symlinked to `~/.claude`. A Go shim binary installed as `~/.claude-accounts/bin/claude` syncs MCP servers, then `syscall.Exec`s the real `claude`. Packages under `internal/` are small and pure where possible. Side effects (subprocess, HTTP, clock) go through small interfaces so they can be faked in tests. Built to grow into a larger CLI later.
 
-**Tech Stack:** Bun 1.2.x, TypeScript (strict), `bun test`. No runtime deps.
+**Tech Stack:** Go 1.27 (installed at `/opt/homebrew/bin/go`), standard library only (`encoding/json`, `net/http`, `crypto/sha256`, `os/exec`, `syscall`, `golang.org/x/text/unicode/norm` is the ONE allowed dependency, for NFC). `go test`, `go vet`. Module path `multiclaude`.
 
-**Spec:** `docs/superpowers/specs/2026-11-19-multiclaude-design.md`
+**Spec:** `docs/superpowers/specs/2026-11-19-multiclaude-design.md` (language switched from Bun/TS to Go by user decision 2026-11-19; everything else in the spec stands).
+
+**Already known:** `docs/experiments/symlink-save.md`: `settings.json` and `plugins/` symlinks survive Claude CLI plugin writes. Interactive `/config` save is unverified → Task 12.
 
 ## Global Constraints
 
-- macOS only. Real claude: `~/.local/bin/claude` (resolve via `CCM_CLAUDE_BIN` env override, else that path).
-- Accounts root: `~/.claude-accounts` (override `CCM_HOME` for tests). Main account = `~/.claude`, name `main`, `CLAUDE_CONFIG_DIR` unset.
+- macOS only. Real claude: env `CCM_CLAUDE_BIN` if set, else `~/.local/bin/claude`. The shim must refuse to exec itself (compare `filepath.EvalSymlinks` of both) → error `ccm: real claude resolves to the shim; set CCM_CLAUDE_BIN`.
+- Accounts root: `~/.claude-accounts` (env `CCM_HOME` overrides). Main account = `~/.claude`, name `main`, `CLAUDE_CONFIG_DIR` unset.
 - Account names: `^[a-z0-9-]{1,32}$`. Reserved: `main add login list run best use status sync t3-sync doctor remove shell-init help`.
 - Account dir paths: absolute, NFC-normalized, no trailing slash, everywhere (registry, env, T3 `homePath`).
-- Keychain service: `Claude Code-credentials` for main; `Claude Code-credentials-<sha256(NFC(dir)).hex[0..8]>` otherwise. Read only via `/usr/bin/security find-generic-password -s <svc> -w`.
-- Keychain JSON: `claudeAiOauth.{accessToken, expiresAt(ms), subscriptionType, rateLimitTier}`.
-- Usage API: `GET https://api.anthropic.com/api/oauth/usage`, headers `Authorization: Bearer <t>`, `anthropic-beta: oauth-2025-04-20`. Windows `five_hour`, `seven_day`, `seven_day_opus`, `seven_day_sonnet` = `{utilization: number|null, resets_at: string|null}`; `extra_usage` optional. Unknown keys are ignored.
+- Keychain service: `Claude Code-credentials` for main; `Claude Code-credentials-<sha256(NFC(dir)) hex[0:8]>` otherwise. Read only via `/usr/bin/security find-generic-password -s <svc> -w`.
+- Keychain JSON: `claudeAiOauth.{accessToken, expiresAt (ms), subscriptionType, rateLimitTier}`.
+- Usage API: `GET https://api.anthropic.com/api/oauth/usage`, headers `Authorization: Bearer <t>`, `anthropic-beta: oauth-2025-04-20`. Windows `five_hour`, `seven_day`, `seven_day_opus`, `seven_day_sonnet` = `{utilization: number|null, resets_at: string|null}`; `extra_usage` optional. Unknown keys ignored. HTTP timeout 10s.
 - `claude auth status --json` fields used: `loggedIn, email, subscriptionType, planTier, loginExpiresAt`.
 - Refresh = run `claude auth status` with the account env. Max 1 refresh per account per invocation. Never call OAuth endpoints directly.
-- Tokens never printed, logged, written to disk, or included in `--json`.
+- Tokens never printed, logged, written to disk, included in `--json`, or included in error strings.
 - Never write `~/.claude.json` or anything under `~/.claude/`. Never edit `~/.zshrc`.
-- Account `.claude.json` writes: re-read → change only `mcpServers` → temp file in same dir, mode `0600` → `rename`.
-- Shim must never block launching Claude: all sync errors go to stderr as `ccm: warning: …` and then exec continues.
+- Account `.claude.json` writes: re-read → change only `mcpServers` (preserve all other keys as `json.RawMessage`) → temp file in same dir, mode `0600` → `os.Rename`.
+- Shim never blocks launching Claude: sync errors print `ccm: warning: …` to stderr, then exec continues.
 - Shared items (link only if source exists): `CLAUDE.md settings.json rules skills plugins scripts agents commands hooks output-styles keybindings.json`.
-- T3 instance: id `claude-<name>` (main → `claude-main`), `{driver:"claudeAgent", enabled:true, config:{binaryPath:<shim abs>, homePath:<dir or "" for main>}}`. Match existing by `homePath`. Back up `settings.json` to `settings.json.ccm-backup-<ts>` before writing.
-- Code style: no mutation of inputs (return new objects), functions <50 lines, files <400 lines, named constants.
+- T3 instance: id `claude-<name>` (main → `claude-main`), `{"driver":"claudeAgent","enabled":true,"config":{"binaryPath":<shim abs>,"homePath":<dir or "" for main>}}`. Match existing by `homePath`. Back up `settings.json` to `settings.json.ccm-backup-<unix>` before writing.
+- Tests: only `t.TempDir()`, fake `Runner`/`http.RoundTripper`/clock. No test touches real `~`, the Keychain, the network, or `~/.t3`. Destructive commands (`security delete-generic-password`) are only ever run through fakes in tests.
+- Style: no mutation of inputs (return new values, copy maps), functions <50 lines, files <400 lines, named constants, errors wrapped with `%w` and context, `go vet` clean, `gofmt` clean.
+- Commits: conventional (`feat:`, `chore:`, …), ending with a blank line + `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 
 ## Review Focus
 
-1. Path given with `~`, a trailing slash or a relative path → same Keychain service name as Claude computes (normalize before hashing). Owned by Task 3.
-2. `~/.claude.json` missing, unparseable, or without `mcpServers` → shim warns and launches Claude anyway; account file untouched. Owned by Task 5.
-3. Usage API returns `null` windows, extra unknown keys, a 429/500, or HTML → that account shows `usage API error`/`n/a`, the others still render, and the combined row notes the exclusion. Owned by Task 7/9.
-4. Two shims launching the same account at the same moment → file is never corrupt (atomic rename, compare-before-write). Owned by Task 5.
-5. Account registered but its Keychain item is missing (never logged in / logged out) → status `logged out → ccm login <name>`, no crash. Owned by Task 3/9.
+1. Path given with `~`, trailing slash or relative → same Keychain service as Claude computes. Owned by Task 3 (test with trailing slash + NFD input).
+2. `~/.claude.json` missing, unparseable or without `mcpServers` → shim warns, launches anyway; account file untouched. Task 5.
+3. Usage API returns `null` windows, unknown keys, 429/500 or HTML → that account `api-error`/`n/a`, others render, combined row notes the exclusion. Tasks 7/9.
+4. Two shims launching the same account at once → file never corrupt (atomic rename, compare-before-write). Task 5 (concurrent goroutines test).
+5. Registered account with no Keychain item → `logged out → ccm login <name>`, no crash. Tasks 3/9.
 
 ---
 
-### Task 1: Scaffold, constants, injectable runtime + symlink experiment
+### Task 1: Module scaffold, constants, paths, runner
 
-**Files:**
-- Create: `package.json`, `tsconfig.json`, `.gitignore`, `src/constants.ts`, `src/runtime.ts`, `tests/runtime.test.ts`, `docs/experiments/symlink-save.md`
+**Files:** `go.mod`, `internal/consts/consts.go`, `internal/paths/paths.go`, `internal/paths/paths_test.go`, `internal/run/run.go`, `internal/run/run_test.go`, `Makefile`
 
-**Interfaces:**
-- Produces:
-  - `constants.ts`: `ACCOUNT_NAME_RE`, `RESERVED_NAMES: ReadonlySet<string>`, `SHARED_ITEMS: readonly string[]`, `USAGE_URL`, `USAGE_BETA = "oauth-2025-04-20"`, `KEYCHAIN_BASE = "Claude Code-credentials"`.
-  - `runtime.ts`: `interface Paths { home; claudeDir; claudeJson; accountsRoot; shimPath; realClaude; t3Settings }`, `resolvePaths(env: Record<string,string|undefined>, home: string): Paths`; `interface Exec { (cmd: string, args: string[], opts?: {env?: Record<string,string>; inherit?: boolean}): Promise<{code:number; stdout:string; stderr:string}> }`; `realExec: Exec` (Bun.spawn); `type Fetch = typeof fetch`; `interface Runtime { paths: Paths; exec: Exec; fetch: Fetch; now: () => number; log: (m:string)=>void; warn: (m:string)=>void }`.
+**Interfaces (Produces):**
+- `consts`: `AccountNameRE *regexp.Regexp`, `ReservedNames map[string]struct{}`, `SharedItems []string`, `UsageURL`, `UsageBeta = "oauth-2025-04-20"`, `KeychainBase = "Claude Code-credentials"`, `MainName = "main"`.
+- `paths`: `type Paths struct{ Home, ClaudeDir, ClaudeJSON, AccountsRoot, ShimPath, RealClaude, T3Settings string }`; `Resolve(getenv func(string) string, home string) Paths`.
+- `run`: `type Result struct{ Code int; Stdout, Stderr string }`; `type Runner interface{ Run(ctx context.Context, name string, args []string, env []string, inherit bool) (Result, error) }`; `OS Runner` (real, `os/exec`; `env == nil` → inherit process env; `inherit` → wire stdio to the terminal); `type Fake struct{ Calls []Call; Respond func(Call) (Result, error) }` (test helper, exported for other packages' tests).
+- `Makefile`: `test` (`go test ./... -cover`), `vet`, `build` (→ `bin/ccm`, `bin/ccm-shim`).
 
-- [ ] **Step 1: Symlink experiment.** In a temp `CLAUDE_CONFIG_DIR` with `settings.json` symlinked to a copy of `~/.claude/settings.json`, run a `claude` command that saves settings (e.g. `claude config set` or toggling via `/config` in a throwaway session). Check if the link is still a symlink (`test -L`). Repeat for `plugins/` (install a tiny plugin). Write results to `docs/experiments/symlink-save.md`. If `settings.json` gets replaced, note the fallback from spec §Decisions 3.
-- [ ] **Step 2: Failing tests** `resolvePaths` → with `HOME=/h` and no overrides: `claudeDir=/h/.claude`, `accountsRoot=/h/.claude-accounts`, `shimPath=/h/.claude-accounts/bin/claude`, `realClaude=/h/.local/bin/claude`, `t3Settings=/h/.t3/userdata/settings.json`. `CCM_HOME=/x` → `accountsRoot=/x`. `CCM_CLAUDE_BIN=/b` → `realClaude=/b`.
-- [ ] **Step 3:** `bun test tests/runtime.test.ts` → FAIL (module missing).
-- [ ] **Step 4:** Implement `constants.ts` and `runtime.ts`.
-- [ ] **Step 5:** `bun test` → PASS. `bunx tsc --noEmit` → clean.
-- [ ] **Step 6:** Commit `chore: scaffold ccm with runtime paths and symlink experiment`.
+- [ ] **Step 1: Failing tests:** `Resolve` with home `/h` and empty env → `ClaudeDir=/h/.claude`, `ClaudeJSON=/h/.claude.json`, `AccountsRoot=/h/.claude-accounts`, `ShimPath=/h/.claude-accounts/bin/claude`, `RealClaude=/h/.local/bin/claude`, `T3Settings=/h/.t3/userdata/settings.json`; `CCM_HOME=/x` → `AccountsRoot=/x`, `ShimPath=/x/bin/claude`; `CCM_CLAUDE_BIN=/b` → `RealClaude=/b`. `OS.Run` of `/bin/echo hi` → `Code 0`, `Stdout "hi\n"`; `/usr/bin/false` → `Code 1`, nil error. Reserved set has exactly 14 names and contains `t3-sync`.
+- [ ] **Step 2:** `go test ./...` → FAIL. **Step 3:** implement. **Step 4:** `go test ./... && go vet ./...` → PASS.
+- [ ] **Step 5:** Commit `chore: go module scaffold with paths and runner`.
 
 ### Task 2: Account registry
 
-**Files:** Create `src/registry.ts`, `tests/registry.test.ts`
+**Files:** `internal/registry/registry.go`, `internal/registry/registry_test.go`
 
 **Interfaces:**
-- Consumes: `Paths`, `ACCOUNT_NAME_RE`, `RESERVED_NAMES`.
-- Produces: `interface Account { name: string; dir: string | null /* null = main */; email?: string }`; `normalizeDir(p: string, home: string): string`; `validateName(name: string): {ok:true}|{ok:false; reason:string}`; `loadAccounts(paths): Promise<Account[]>` (main always first; missing file → `[main]`); `saveAccounts(paths, accounts: Account[]): Promise<void>` (atomic, excludes main); `withAccount(list, acct): Account[]`; `withoutAccount(list, name): Account[]`; `findAccount(list, name): Account | undefined`.
+- Consumes: `paths.Paths`, `consts`.
+- Produces: `type Account struct{ Name string \`json:"name"\`; Dir string \`json:"dir"\` /* "" = main */; Email string \`json:"email,omitempty"\` }`; `(a Account) IsMain() bool`; `NormalizeDir(p, home string) string`; `ValidateName(name string) error`; `Load(p paths.Paths) ([]Account, error)` (main always first; missing file → `[main]`; file `<AccountsRoot>/accounts.json`); `Save(p paths.Paths, accts []Account) error` (atomic, excludes main); `With(list []Account, a Account) []Account` (replace by name or append, new slice); `Without(list []Account, name string) []Account`; `Find(list []Account, name string) (Account, bool)`.
 
-- [ ] **Step 1: Failing tests:**
-  - `validateName("work")` ok; `"Work"`, `"a b"`, `""`, 33 chars, `"status"` → not ok with reason.
-  - `normalizeDir("~/.claude-accounts/work/", "/h")` → `"/h/.claude-accounts/work"`. Relative `"x"` resolves against home. NFD `"é"` input comes back NFC.
-  - load with no file → `[{name:"main", dir:null}]`. save then load round-trips. `withAccount` doesn't mutate its input (deep-equal original after).
-  - corrupt `accounts.json` → `loadAccounts` throws an error whose message contains the file path.
-- [ ] **Step 2:** run → FAIL. **Step 3:** implement. **Step 4:** run → PASS.
-- [ ] **Step 5:** Commit `feat: add account registry`.
+- [ ] **Step 1: Failing tests:** `ValidateName`: `work` ok; `Work`, `a b`, `""`, 33×`a`, `status` → error (reserved error message contains `reserved`). `NormalizeDir("~/.claude-accounts/work/", "/h")` → `/h/.claude-accounts/work`; `"x"` → `/h/x`; NFD `"é"` → NFC `"é"`. Load without file → `[{main}]`. Save→Load round-trip. `With` leaves its input slice unchanged. Corrupt file → error mentioning the path.
+- [ ] **Step 2:** FAIL. **Step 3:** implement. **Step 4:** PASS.
+- [ ] **Step 5:** Commit `feat: account registry`.
 
 ### Task 3: Keychain service name + credential reader
 
-**Files:** Create `src/keychain.ts`, `tests/keychain.test.ts`
+**Files:** `internal/keychain/keychain.go`, `internal/keychain/keychain_test.go`
 
 **Interfaces:**
-- Consumes: `Exec`, `Account`, `normalizeDir`.
-- Produces: `keychainService(dir: string | null): string`; `interface Creds { accessToken: string; expiresAt: number; subscriptionType?: string; rateLimitTier?: string }`; `readCreds(exec: Exec, acct: Account): Promise<Creds | null>` (null when `security` exits non-zero, e.g. item not found); throws `CredsParseError` on malformed JSON (the message must not include the secret).
+- Consumes: `run.Runner`, `registry.Account`.
+- Produces: `Service(dir string) string` (`""` → base); `type Creds struct{ AccessToken string; ExpiresAt int64; SubscriptionType, RateLimitTier string }`; `(c Creds) String() string` returns `Creds{redacted}`; `Read(ctx, r run.Runner, a registry.Account) (*Creds, error)` → `nil, nil` when `security` exits non-zero; `ErrCredsParse` on bad JSON (error text never contains stdout).
 
-- [ ] **Step 1: Failing tests:**
-  - `keychainService(null)` → `"Claude Code-credentials"`.
-  - `keychainService("/Users/test/.claude-accounts/work")` → `"Claude Code-credentials-d9263ab7"` (vector computed from Claude's algorithm).
-  - fake exec returning code 44 → `readCreds` returns `null`. Fake exec returning valid JSON → `accessToken`/`expiresAt` parsed. Invalid JSON containing the text `SECRET` → throws, and `String(err)` does not contain `SECRET`.
-  - exec called with `["find-generic-password","-s",<svc>,"-w"]` on `/usr/bin/security`.
-- [ ] **Step 2:** FAIL. **Step 3:** implement (`crypto.createHash("sha256")`). **Step 4:** PASS.
-- [ ] **Step 5:** Commit `feat: compute per-account keychain service and read creds`.
+- [ ] **Step 1: Failing tests:** `Service("")` → `Claude Code-credentials`; `Service("/Users/test/.claude-accounts/work")` → `Claude Code-credentials-d9263ab7`. Fake runner exit 44 → `nil, nil`. Valid JSON → fields parsed. Invalid JSON containing `SECRET` → `errors.Is(err, ErrCredsParse)` and `err.Error()` lacks `SECRET`. `fmt.Sprint(creds)` lacks the token. The runner is called with `/usr/bin/security`, `[find-generic-password -s <svc> -w]`.
+- [ ] **Step 2:** FAIL. **Step 3:** implement. **Step 4:** PASS.
+- [ ] **Step 5:** Commit `feat: per-account keychain service and creds reader`.
 
 ### Task 4: Shared symlinks (link, detect, careful fix)
 
-**Files:** Create `src/shared-links.ts`, `tests/shared-links.test.ts`
+**Files:** `internal/links/links.go`, `internal/links/links_test.go`
 
 **Interfaces:**
-- Consumes: `Paths`, `SHARED_ITEMS`.
-- Produces: `type LinkState = {item:string; state:"ok"|"missing"|"replaced"|"wrong-target"|"no-source"}`; `inspectLinks(paths, accountDir): Promise<LinkState[]>`; `linkShared(paths, accountDir): Promise<string[]>` (creates missing links, returns created; never touches existing real files); `fixReplaced(paths, accountDir, item, now: number): Promise<{action:"relinked-identical"|"relinked-with-backup"; backupPath?: string}>`.
+- Produces: `type State string` (`StateOK "ok"`, `StateMissing "missing"`, `StateReplaced "replaced"`, `StateWrongTarget "wrong-target"`, `StateNoSource "no-source"`); `type Item struct{ Name string; State State }`; `Inspect(p paths.Paths, accountDir string) ([]Item, error)`; `LinkMissing(p, accountDir) ([]string, error)` (creates only missing; never touches existing real files); `type FixResult struct{ Action string /* "relinked-identical" | "relinked-with-backup" */; BackupPath string }`; `FixReplaced(p, accountDir, item string, now time.Time) (FixResult, error)`.
 
-- [ ] **Step 1: Failing tests** (in a tmp dir fake `~/.claude`):
-  - `linkShared` links only items that exist in the source; second call creates nothing.
-  - item replaced with an identical real file → `inspectLinks` shows `replaced`; `fixReplaced` → `relinked-identical`, no backup file.
-  - replaced with different content → `relinked-with-backup`, backup exists at `<item>.ccm-backup-<now>` with the account's content, item is a symlink again, source untouched.
-  - replaced directory (e.g. `rules/`) differing → backup dir moved (not copied-then-deleted), relinked.
-  - `fixReplaced` never deletes an existing backup; the source file's mtime is unchanged.
-- [ ] **Step 2:** FAIL. **Step 3:** implement. Compare with recursive content equality for dirs. **Step 4:** PASS.
+- [ ] **Step 1: Failing tests** (temp fake `~/.claude`): `LinkMissing` links only existing sources, and a second call returns empty. A replaced identical file → `Inspect` shows `replaced`; `FixReplaced` → `relinked-identical`, no backup. A replaced differing file → `relinked-with-backup`, backup `<item>.ccm-backup-<unix>` holds the account's content, item is a symlink again, source content and mtime unchanged. A replaced differing dir (`rules/`) → backup made by `os.Rename` (the dir inode is preserved) and relinked. An existing backup path → a new unique suffix, never overwritten.
+- [ ] **Step 2:** FAIL. **Step 3:** implement (recursive byte compare for dirs). **Step 4:** PASS.
 - [ ] **Step 5:** Commit `feat: shared symlinks with careful replace detection and fix`.
 
-### Task 5: MCP sync + launcher shim
+### Task 5: MCP sync + shim binary
 
-**Files:** Create `src/mcp-sync.ts`, `src/shim.ts`, `tests/mcp-sync.test.ts`, `tests/shim.test.ts`
-
-**Interfaces:**
-- Consumes: `Paths`, `normalizeDir`.
-- Produces:
-  - pure `mergeMcp(main: Record<string,unknown>, account: Record<string,unknown>, prevSynced: string[]): {servers: Record<string,unknown>; synced: string[]; changed: boolean}`.
-  - `syncMcp(paths, accountDir): Promise<{changed:boolean}>`. State in `<accountsRoot>/state.json` → `{ mcpSynced: { [dir]: string[] } }`.
-  - `shimMain(argv: string[], env, rt: Runtime): Promise<never>`: syncs when `CLAUDE_CONFIG_DIR` is set and is not `claudeDir`; warns on any error; then `exec` replaces the process (`Bun.spawn` inherit + `process.exit(code)`, forwarding signals).
-  - `renderShimScript(bunPath: string, shimModulePath: string): string`: shebang `#!<abs bun>` file that imports `shimMain`.
-
-- [ ] **Step 1: Failing tests (`mergeMcp`):**
-  - main `{a,b}`, account `{x}`, prev `[]` → servers `{a,b,x}`, synced `[a,b]`, changed true.
-  - main `{a}` (b removed), account `{a,b,x}`, prev `[a,b]` → `{a,x}`, synced `[a]`.
-  - name clash: main `a=1`, account `a=2`, prev `[]` → `a=1`.
-  - identical inputs → changed false.
-  - inputs are deep-equal to the originals after the call.
-- [ ] **Step 2: Failing tests (`syncMcp`, tmp fs):**
-  - account `.claude.json` keeps every non-`mcpServers` key byte-for-byte equal (parse-compare). File mode is `0600`.
-  - no change → file mtime unchanged.
-  - main `.claude.json` missing or corrupt → throws a typed `McpSourceError`; account file untouched.
-  - account `.claude.json` missing → created with only `mcpServers`.
-  - 20 concurrent `syncMcp` calls → final file parses and has the expected servers.
-- [ ] **Step 3: Failing tests (`shimMain` with fake exec):**
-  - `CLAUDE_CONFIG_DIR` unset → no sync, exec real claude with the same argv/env.
-  - sync throws → stderr contains `ccm: warning:` and exec still happens.
-  - account with a replaced shared link → stderr `ccm: warning: <item> is no longer shared — run ccm doctor`, exec still happens (uses `inspectLinks` from Task 4).
-- [ ] **Step 4:** FAIL. **Step 5:** implement. **Step 6:** PASS.
-- [ ] **Step 7:** Commit `feat: launcher shim with automatic one-way MCP sync`.
-
-### Task 6: Auth (status / login / refresh) + `ccm add`, `ccm login`
-
-**Files:** Create `src/auth.ts`, `src/commands/add.ts`, `src/commands/login.ts`, `tests/auth.test.ts`, `tests/commands/add-login.test.ts`
+**Files:** `internal/mcp/merge.go`, `internal/mcp/sync.go`, `internal/mcp/*_test.go`, `internal/shim/shim.go`, `internal/shim/shim_test.go`, `cmd/ccm-shim/main.go`
 
 **Interfaces:**
-- Consumes: `Runtime`, registry, `linkShared`, `syncMcp`, `keychainService`.
 - Produces:
-  - `accountEnv(acct: Account, base: Record<string,string>): Record<string,string>` (sets or deletes `CLAUDE_CONFIG_DIR`, returns a new object).
-  - `authStatus(rt, acct): Promise<{loggedIn:boolean; email?:string; subscriptionType?:string; planTier?:string; loginExpiresAt?:string}>` (runs `claude auth status --json` through the shim path).
-  - `refreshAuth(rt, acct): Promise<void>` = `authStatus` (side effect: CLI refreshes).
-  - `login(rt, acct, email?): Promise<{email:string}>`: runs `claude auth login --claudeai [--email e]` inheriting stdio; then `authStatus`. Throws `LoginMismatchError` (with expected/actual) on email mismatch.
-  - `cmdAdd(rt, name, opts:{email?:string}): Promise<number>`, `cmdLogin(rt, name | "--all"): Promise<number>`.
+  - pure `Merge(main, account map[string]json.RawMessage, prevSynced []string) (servers map[string]json.RawMessage, synced []string, changed bool)`. `synced` is sorted. Inputs are not mutated.
+  - `Sync(p paths.Paths, accountDir string) (changed bool, err error)`. State `<AccountsRoot>/state.json` = `{"mcpSynced": {"<dir>": ["a","b"]}}` (atomic write). `ErrSource` when main `.claude.json` is missing or bad.
+  - `shim.Main(args []string, env []string, deps shim.Deps) error` with `type Deps struct{ Paths paths.Paths; Exec func(argv0 string, argv []string, env []string) error /* syscall.Exec in prod */; Stderr io.Writer; Inspect func(p paths.Paths, dir string) ([]links.Item, error) }`. Syncs when `CLAUDE_CONFIG_DIR` is set and ≠ `ClaudeDir`; prints warnings; checks shim≠real; execs `RealClaude` with argv `["claude", args...]` and env unchanged.
+  - `cmd/ccm-shim/main.go` wires the real deps; on exec failure prints `ccm: cannot start claude: <err>` and exits 127.
 
-- [ ] **Step 1: Failing tests:**
-  - `accountEnv(main)` has no `CLAUDE_CONFIG_DIR`; for `work` it's the dir; the input env is not mutated.
-  - `login` passes `--email you@x.com` when given; mismatch → `LoginMismatchError`; email equal to another registered account's → the result flags `duplicateOf: "<name>"` and `cmdLogin` prints a warning naming it.
-  - `cmdAdd("status")` → exit 1 with the reserved-name message. `cmdAdd("work")` in tmp → dir created, links made, MCP synced, registry has `work` with email, login invoked once. Re-running `cmdAdd("work")` resumes (no error, no duplicate entry).
-  - `cmdLogin("--all")` logs in only accounts where `loggedIn=false`, in registry order.
-  - Printed guidance contains the line `Sign in as <email> in the browser. If it's signed in to another Claude account, open the printed URL in a private window.`
+- [ ] **Step 1: Failing tests (`Merge`):** main `{a,b}`, acct `{x}`, prev `[]` → `{a,b,x}`, synced `[a b]`, changed. Main `{a}`, acct `{a,b,x}`, prev `[a b]` → `{a,x}`, synced `[a]`. Clash main `a=1`, acct `a=2` → `a=1`. Identical → not changed. Inputs unchanged (`reflect.DeepEqual` with copies).
+- [ ] **Step 2: Failing tests (`Sync`):** non-`mcpServers` keys byte-equal after sync (compare `json.RawMessage`); mode `0600`; no change → mtime unchanged; main missing/corrupt → `errors.Is(err, ErrSource)` and the account file is untouched; account file missing → created; 20 goroutines calling `Sync` concurrently → final file valid JSON with the expected servers, and no `*.tmp` files left.
+- [ ] **Step 3: Failing tests (`shim.Main`):** `CLAUDE_CONFIG_DIR` unset → fake Exec called with `RealClaude`, argv `["claude", ...args]`, the same env, and no sync. Sync error → stderr has `ccm: warning:` and Exec still called. Replaced link → stderr `ccm: warning: <item> is no longer shared — run ccm doctor`, Exec still called. `RealClaude` symlinked to `ShimPath` → error containing `CCM_CLAUDE_BIN`, Exec not called.
+- [ ] **Step 4:** FAIL. **Step 5:** implement. **Step 6:** PASS; `go build ./cmd/ccm-shim`.
+- [ ] **Step 7:** Commit `feat: native launcher shim with automatic one-way MCP sync`.
+
+### Task 6: Auth + `ccm add`, `ccm login`
+
+**Files:** `internal/auth/auth.go`, `internal/auth/auth_test.go`, `internal/cli/add.go`, `internal/cli/login.go`, `internal/cli/app.go`, `internal/cli/add_login_test.go`
+
+**Interfaces:**
+- Produces:
+  - `auth.Env(a registry.Account, base []string) []string` (new slice; sets or removes `CLAUDE_CONFIG_DIR`).
+  - `type Status struct{ LoggedIn bool; Email, SubscriptionType, PlanTier, LoginExpiresAt string }` (JSON tags as in the Global Constraints); `auth.GetStatus(ctx, r run.Runner, p paths.Paths, a registry.Account) (Status, error)` runs `<ShimPath> auth status --json`.
+  - `auth.Refresh` = `GetStatus` (discarding the result).
+  - `auth.Login(ctx, r, p, a, email string) (Status, error)` runs `<ShimPath> auth login --claudeai [--email e]` with inherited stdio, then `GetStatus`. `*MismatchError{Want, Got string}` when the email differs.
+  - `cli.App struct{ Paths paths.Paths; Runner run.Runner; HTTP *http.Client; Now func() time.Time; Out, Err io.Writer; In io.Reader }` — shared by all commands.
+  - `(*App) Add(ctx, name, email string) int`, `(*App) Login(ctx, target string /* name or "--all" */) int`.
+- [ ] **Step 1: Failing tests:** `Env(main)` drops `CLAUDE_CONFIG_DIR`; `Env(work)` sets it; base slice unchanged. `Login` passes `--email you@x.com`; a mismatch → `*MismatchError`. An email equal to another account's → output contains `already used by account "<name>"`. `Add("status")` → 1 + reserved message. `Add("work","you@x.com")` (temp) → dir, links, MCP synced, registry entry with email, exactly one login call. Re-running `Add("work")` → resumes, no duplicate. `Login("--all")` logs in only `LoggedIn=false` accounts, in registry order. Output contains exactly: `Sign in as <email> in the browser. If it's signed in to another Claude account, open the printed URL in a private window.`
 - [ ] **Step 2:** FAIL. **Step 3:** implement. **Step 4:** PASS.
-- [ ] **Step 5:** Commit `feat: easy account add and login with email prefill and mismatch checks`.
+- [ ] **Step 5:** Commit `feat: easy account add and login with email prefill and checks`.
 
 ### Task 7: Usage API client + aggregation
 
-**Files:** Create `src/usage/api.ts`, `src/usage/aggregate.ts`, `tests/usage/api.test.ts`, `tests/usage/aggregate.test.ts`
+**Files:** `internal/usage/api.go`, `internal/usage/aggregate.go`, `internal/usage/*_test.go`
 
 **Interfaces:**
-- Consumes: `Creds`, `readCreds`, `refreshAuth`, `Fetch`.
 - Produces:
-  - `type Window = {usedPct: number|null; resetsAt: number|null /* ms */}`; `type Usage = {fiveHour: Window; sevenDay: Window; sevenDayOpus?: Window; sevenDaySonnet?: Window; extra?: {enabled:boolean; usedPct:number|null}}`.
-  - `parseUsage(json: unknown): Usage` (tolerant: missing/null → `{usedPct:null, resetsAt:null}`; ignores unknown keys; throws `UsageShapeError` if not an object).
-  - `type AccountUsage = {account: string; email?: string; plan?: string; state: "ok"|"logged-out"|"expired-refreshed"|"api-error"; error?: string; usage?: Usage}`.
-  - `fetchAccountUsage(rt, acct): Promise<AccountUsage>`: read creds → if missing → `logged-out`; if `expiresAt <= now` → refresh once, re-read; GET; on 401 → refresh once then retry once; non-200 → `api-error` with status code (never the body if it contains `Bearer`).
-  - `aggregate(list: AccountUsage[], now:number): {fiveHourRemaining: number; sevenDayRemaining: number /* sum of (100-used)/100 over ok accounts */; counted: number; excluded: string[]; availableNow: number /* both windows <100 */; nextResetAt: number|null /* soonest reset among accounts with a window >=100 */}`.
-
-- [ ] **Step 1: Failing tests:**
-  - `parseUsage({five_hour:{utilization:42.5,resets_at:"2026-11-19T20:00:00Z"}, seven_day:null, iguana_necktie:{}})` → `fiveHour.usedPct=42.5`, `sevenDay.usedPct=null`, no throw.
-  - fetch 401 then 200 → state `expired-refreshed`, refresh called exactly once. Fetch 401 twice → `api-error`, refresh called once.
-  - fetch 500 with an HTML body → `api-error` with error `HTTP 500`.
-  - no creds → `logged-out`, fetch not called.
-  - request carries both headers exactly. A test asserts the token string never appears in `JSON.stringify(result)`.
-  - aggregate over [ok 5h=40/7d=10, ok 5h=100/7d=50 resets T, api-error] → `fiveHourRemaining=0.6`, `sevenDayRemaining=1.4`, `counted=2`, `excluded=[third]`, `availableNow=1`, `nextResetAt=T`.
-- [ ] **Step 2:** FAIL. **Step 3:** implement. **Step 4:** PASS.
-- [ ] **Step 5:** Commit `feat: per-account usage fetch with safe refresh and combined aggregation`.
+  - `type Window struct{ UsedPct *float64; ResetsAt *time.Time }`; `type Usage struct{ FiveHour, SevenDay Window; SevenDayOpus, SevenDaySonnet *Window; Extra *Extra }`; `type Extra struct{ Enabled bool; UsedPct *float64 }`.
+  - `Parse(b []byte) (Usage, error)`: tolerant; error only if not a JSON object.
+  - `type State string` (`ok`, `logged-out`, `expired-refreshed`, `api-error`); `type AccountUsage struct{ Account, Email, Plan string; State State; Err string; Usage *Usage }`.
+  - `type Fetcher struct{ Runner run.Runner; Paths paths.Paths; HTTP *http.Client; Now func() time.Time }`; `(f Fetcher) Fetch(ctx, a registry.Account) AccountUsage`: read creds → none → `logged-out`; `ExpiresAt <= now` → refresh once, re-read; GET; 401 → refresh once (if not already) then retry once; non-200 → `api-error` with `Err = "HTTP <code>"`.
+  - `type Combined struct{ FiveHourLeft, SevenDayLeft float64; Counted int; Excluded []string; AvailableNow int; NextResetAt *time.Time }`; `Aggregate(list []AccountUsage) Combined` — left = Σ(100−used)/100 over `ok`/`expired-refreshed` accounts with non-nil used; available = both windows <100; next reset = soonest reset among windows ≥100.
+- [ ] **Step 1: Failing tests:** `Parse` of `{"five_hour":{"utilization":42.5,"resets_at":"2026-11-19T20:00:00Z"},"seven_day":null,"iguana_necktie":{}}` → 5h 42.5, 7d nil, no error; `Parse("[]")` → error. Via `httptest.Server` + a URL override field: 401→200 → `expired-refreshed`, one refresh; 401→401 → `api-error`, one refresh; 500 with an HTML body → `Err == "HTTP 500"`; no creds → `logged-out` with zero HTTP calls; request headers exact; the token is absent from `fmt.Sprintf("%+v", result)`. `Aggregate` over [ok 40/10, ok 100/50 reset T, api-error x] → 5h left 0.6, 7d left 1.4, counted 2, excluded [x], available 1, next reset T.
+- [ ] **Step 2:** FAIL. **Step 3:** implement (`Fetcher` has an unexported `url` field defaulting to `consts.UsageURL`, settable in tests via an option). **Step 4:** PASS.
+- [ ] **Step 5:** Commit `feat: per-account usage fetch with safe refresh and combined totals`.
 
 ### Task 8: Today's tokens from transcripts
 
-**Files:** Create `src/usage/tokens.ts`, `tests/usage/tokens.test.ts`
+**Files:** `internal/tokens/tokens.go`, `internal/tokens/tokens_test.go`
 
 **Interfaces:**
-- Produces: `type Tokens = {input:number; output:number; cacheRead:number; cacheWrite:number}`; `tokensToday(projectsDir: string, now: number): Promise<Tokens>`. Scans `**/*.jsonl` with mtime ≥ local midnight. Counts `type:"assistant"` lines with `message.usage`, skips model `<synthetic>`, dedupes by `message.id:requestId` keeping the max per channel (same rule as T3 `claudeUsage.ts`). Skips unparseable lines.
-
-- [ ] **Step 1: Failing tests:** fixture with two lines sharing a dedupe key (output 10 then 25) → output 25. A `<synthetic>` line is ignored. A line from yesterday (by `timestamp`) is ignored. A garbage line is ignored.
-- [ ] **Step 2:** FAIL. **Step 3:** implement (stream lines; no full-file regex). **Step 4:** PASS.
+- Produces: `type Tokens struct{ Input, Output, CacheRead, CacheWrite int64 }`; `Today(projectsDir string, now time.Time) (Tokens, error)`. Walks `*.jsonl` with mtime ≥ local midnight. Counts lines with `type=="assistant"` and `message.usage` whose `timestamp` is today. Skips model `<synthetic>`. Dedupes on `message.id + ":" + requestId`, keeping the max per channel. Skips unparseable lines. `bufio.Scanner` with a 16 MB buffer.
+- [ ] **Step 1: Failing tests:** two lines with the same key, output 10 then 25 → output 25. A `<synthetic>` line is ignored. A line timestamped yesterday is ignored. A garbage line is ignored. A missing dir → zero, nil.
+- [ ] **Step 2:** FAIL. **Step 3:** implement. **Step 4:** PASS.
 - [ ] **Step 5:** Commit `feat: today's token totals per account`.
 
 ### Task 9: `ccm status` and `ccm best`
 
-**Files:** Create `src/commands/status.ts`, `src/render/table.ts`, `src/commands/best.ts`, `tests/commands/status.test.ts`, `tests/commands/best.test.ts`
+**Files:** `internal/cli/status.go`, `internal/cli/render.go`, `internal/cli/best.go`, `internal/cli/status_test.go`, `internal/cli/best_test.go`
 
 **Interfaces:**
-- Consumes: `fetchAccountUsage`, `aggregate`, `tokensToday`, `authStatus`, `inspectLinks`.
-- Produces: `cmdStatus(rt, opts:{json:boolean; watch?:number}): Promise<number>`; `renderStatus(rows, agg, now): string`; `pickBest(list: AccountUsage[]): AccountUsage | null` (ok accounts with both windows <100, lowest `max(5h,7d)`, ties → registry order); `cmdBest(rt, claudeArgs: string[]): Promise<number>` (prints the chosen account + reason, then execs the shim with `accountEnv`).
-
+- Consumes: `usage.Fetcher`, `usage.Aggregate`, `tokens.Today`, `auth.GetStatus`, `links.Inspect`.
+- Produces: `(*App) Status(ctx, jsonOut bool, watch time.Duration) int`; `RenderStatus(rows []Row, c usage.Combined, now time.Time) string` with `type Row struct{ usage.AccountUsage; Today tokens.Tokens; LinkWarnings []string }`; `PickBest(list []usage.AccountUsage) (usage.AccountUsage, bool)`; `(*App) Best(ctx, claudeArgs []string) int`.
 - [ ] **Step 1: Failing tests:**
-  - Rendered table has a header `ACCOUNT  EMAIL  PLAN  5H USED  5H LEFT  5H RESET  7D USED  7D LEFT  7D RESET  TODAY TOK  STATE`, one row per account, and a `ALL` row like `5h left 0.6/2 acct (30%) · 7d left 1.4/2 (70%) · available now 1 · next reset in 1h12m · excluded: x`.
-  - `null` window renders `n/a`. Logged-out row state reads `logged out → ccm login <name>`.
-  - A replaced shared link adds one line `⚠ <account>: <item> is no longer shared — run ccm doctor`.
-  - `--json` output parses and has no `accessToken` key anywhere.
-  - Accounts are fetched concurrently (fake fetch with delays: total time < sum).
-  - `--watch 30`: refresh happens at most once per account per its token `expiresAt` or 10 min (inject clock).
-  - `pickBest`: [5h 90/7d 20, 5h 30/7d 60, 5h 100] → second. All limited → `null`, and `cmdBest` exits 2 with `all accounts limited; next reset in …`.
+  - Header is exactly `ACCOUNT  EMAIL  PLAN  5H USED  5H LEFT  5H RESET  7D USED  7D LEFT  7D RESET  TODAY TOK  STATE` (tabwriter, columns may widen). One row per account.
+  - `ALL` line format: `ALL  5h left 0.6/2 acct (30%) · 7d left 1.4/2 (70%) · available now 1 · next reset in 1h12m · excluded: x`.
+  - A nil window renders `n/a`. Logged out → `logged out → ccm login <name>`.
+  - A replaced link → line `⚠ <account>: <item> is no longer shared — run ccm doctor`.
+  - `--json` → valid JSON with no `accessToken`/`AccessToken` substring.
+  - Fetches run concurrently (errgroup-free: `sync.WaitGroup`). With 3 fakes × 100 ms delay, the total is < 250 ms.
+  - Watch mode: injected clock; an account in error is retried only after 10 min.
+  - `PickBest([90/20, 30/60, 100/x])` → second. All limited → false, and `Best` exits 2 printing `all accounts limited; next reset in …`.
+  - `Best` execs the shim with `auth.Env`. Injected through `App.Runner` with `inherit=true`; the exit code is propagated.
 - [ ] **Step 2:** FAIL. **Step 3:** implement. **Step 4:** PASS.
 - [ ] **Step 5:** Commit `feat: status dashboard and best-account launcher`.
 
 ### Task 10: `ccm t3-sync`
 
-**Files:** Create `src/t3.ts`, `src/commands/t3-sync.ts`, `tests/t3.test.ts`
+**Files:** `internal/t3/t3.go`, `internal/t3/t3_test.go`, `internal/cli/t3sync.go`
 
 **Interfaces:**
-- Produces: pure `mergeT3(settings: unknown, accounts: Account[], shimPath: string): {settings: object; added: string[]; updated: string[]}`; `cmdT3Sync(rt): Promise<number>` (backup → write atomically → print "restart T3 Code to apply").
-
-- [ ] **Step 1: Failing tests:**
-  - Existing `codex` instance and unrelated keys are preserved unchanged.
-  - Existing `claudeAgent` instance whose `homePath` equals an account dir → updated in place (keeps its id and extra config fields such as `customModels`, `launchArgs`), `binaryPath` set to the shim.
-  - New accounts → `claude-<name>` entries. Main → `homePath: ""`.
-  - Running twice → second result has `added=[]` and `updated=[]`.
-  - Input object is not mutated.
+- Produces: pure `Merge(settings []byte, accts []registry.Account, shimPath string) (out []byte, added, updated []string, err error)`. Works on `map[string]json.RawMessage` so unknown keys and fields round-trip. `(*App) T3Sync(ctx) int` (backup → atomic write → print `Restart T3 Code to apply.`).
+- [ ] **Step 1: Failing tests:** an existing `codex` instance and unrelated keys round-trip byte-equal (compare `RawMessage`). An existing `claudeAgent` instance with matching `homePath` → updated in place, keeping its id and extra `config` fields (`customModels`, `launchArgs`), with `binaryPath` set to the shim. New accounts → `claude-<name>`. Main → `homePath: ""`. A second run → added and updated both empty. Empty/missing settings → creates `{"providerInstances":{…}}`.
 - [ ] **Step 2:** FAIL. **Step 3:** implement. **Step 4:** PASS.
 - [ ] **Step 5:** Commit `feat: generate T3 Code claude instances per account`.
 
-### Task 11: Remaining commands, CLI dispatch, install
+### Task 11: Remaining commands, dispatch, install
 
-**Files:** Create `src/commands/{run,use,shell-init,list,sync,doctor,remove}.ts`, `src/cli.ts`, `bin/ccm`, `scripts/install.ts`, `tests/cli.test.ts`, `tests/commands/doctor.test.ts`
+**Files:** `internal/cli/{run,use,shellinit,list,sync,doctor,remove,dispatch}.go`, tests alongside, `cmd/ccm/main.go`, `internal/cli/install.go`
 
 **Interfaces:**
-- Consumes: everything above.
-- Produces: `main(argv: string[], rt: Runtime): Promise<number>`; `bin/ccm` = `#!/usr/bin/env bun` → `process.exit(await main(...))`.
-  - `run <name> [args]` and `<name> [args]` (when name is registered) → exec shim with `accountEnv`.
-  - `use <name>` → prints `export CLAUDE_CONFIG_DIR='<dir>'; export CCM_ACCOUNT='<name>'` (main → `unset CLAUDE_CONFIG_DIR; export CCM_ACCOUNT='main'`).
-  - `shell-init zsh` → prints a `ccm()` function that `eval`s `command ccm use …` for `use` and otherwise calls `command ccm "$@"`, plus `export PATH="$HOME/.claude-accounts/bin:$PATH"` so plain `claude` goes through the shim.
-  - `list`, `sync`, `remove <name> [--purge]` (asks for confirmation via stdin `y`; `--purge` also deletes the dir and runs `security delete-generic-password -s <svc>`).
-  - `doctor [--fix]` checks: real claude exists; shim exists and is executable; per account: links (`inspectLinks`), MCP drift (`mergeMcp(...).changed`), Keychain item present, T3 settings contain a matching instance, T3 service reachable (`t3` CLI present; report only). `--fix` applies `linkShared`, `fixReplaced`, `syncMcp`, re-renders the shim. Exit 0 only when all ok.
-  - `scripts/install.ts`: write the shim (`renderShimScript(Bun.which("bun") abs, src/shim-entry)`), `chmod 755`, symlink `bin/ccm` → `~/.local/bin/ccm`, then print the `eval "$(ccm shell-init zsh)"` line for the user to add.
-  - Unknown command → usage text, exit 64.
-- [ ] **Step 1: Failing tests:** dispatch table (each command routes; unknown → 64); `use main` output exact; `shell-init zsh` output contains `eval "$(command ccm use` and the PATH line; `doctor` with one replaced link → exit 1 and the line names the item; `doctor --fix` → exit 0 and the backup is reported; `remove work` without `y` → nothing changed.
-- [ ] **Step 2:** FAIL. **Step 3:** implement. **Step 4:** PASS. `bun test --coverage` ≥ 80% lines.
-- [ ] **Step 5:** Commit `feat: ccm CLI commands, doctor, and installer`.
+- Produces: `(*App) Main(ctx, args []string) int`. Commands:
+  - `run <name> [args]` and `<name> [args]` (registered name) → shim with `auth.Env`, inherited stdio, exit code propagated.
+  - `use <name>` → prints `export CLAUDE_CONFIG_DIR='<dir>'; export CCM_ACCOUNT='<name>'`. Main → `unset CLAUDE_CONFIG_DIR; export CCM_ACCOUNT='main'`. Single quotes are escaped.
+  - `shell-init zsh` → `export PATH="<AccountsRoot>/bin:$PATH"`, plus a `ccm()` function: for `use`, `eval "$(command ccm use "$2")"`; else `command ccm "$@"`.
+  - `list`, `sync` (`LinkMissing` + `mcp.Sync` for all accounts), `remove <name> [--purge]` (prompt `Remove account "<name>"? [y/N]` on `In`; `--purge` also `os.RemoveAll(dir)` and `security delete-generic-password -s <svc>` via the Runner).
+  - `doctor [--fix]`: checks that the real claude exists and ≠ shim; the shim is present and executable; per account: links, MCP drift (`Merge(...).changed`), Keychain item present, T3 instance present; `t3` CLI on PATH (report only). `--fix` runs `LinkMissing`, `FixReplaced` (prints backup paths) and `mcp.Sync`. Exit 0 iff all ok.
+  - `install`: builds nothing. It copies its own sibling `ccm-shim` binary to `ShimPath` (mode 0755), symlinks the `ccm` executable (`os.Executable`) into `~/.local/bin/ccm`, then prints the line to add: `eval "$(ccm shell-init zsh)"`.
+  - `help`/unknown → usage text; unknown exits 64.
+- [ ] **Step 1: Failing tests:** dispatch routes each command and an unknown one → 64. `use main` output exact. `use` with a quote in the dir is escaped. `shell-init zsh` contains `eval "$(command ccm use` and the PATH line. `doctor` with a replaced link → 1 and names the item; `--fix` → 0 and prints the backup path. `remove work` with input `n` → registry unchanged; `--purge` with `y` → the fake runner saw `delete-generic-password`.
+- [ ] **Step 2:** FAIL. **Step 3:** implement. **Step 4:** `go test ./... -cover` → total ≥ 80%; `go vet ./...` clean; `make build`.
+- [ ] **Step 5:** Commit `feat: ccm commands, doctor, and installer`.
 
-### Task 12: README + live E2E checklist
+### Task 12: README + live E2E (with the user)
 
-**Files:** Create `README.md`, `docs/e2e-checklist.md`
+**Files:** `README.md`, `docs/e2e-checklist.md`
 
-- [ ] **Step 1:** README covers: install (`bun scripts/install.ts`, add the shell-init line), `ccm add`/`login`, parallel use, `status`/`best`, T3 (`ccm t3-sync`, restart T3, `t3 up` for phone), MCP auto-share and its secret-duplication trade-off, remote MCP servers that use OAuth (their tokens live per account in the Keychain → authorize once per account), the symlink experiment result, the undocumented usage endpoint caveat, and uninstall.
-- [ ] **Step 2: Live run (with the user):** install → `ccm doctor` → `ccm add <second>` (user logs in) → two terminals `ccm main` + `ccm <second>` at the same time, each `/status` showing a different email → `ccm status` shows both + the ALL row → `ccm t3-sync`, restart T3, both instances visible, one thread on each → `t3 up` and open from the phone → add a dummy MCP to `~/.claude.json` via `claude mcp add -s user`, start a new `<second>` session, `/mcp` lists it → remove it, and it's gone next launch. Record results in `docs/e2e-checklist.md`.
+- [ ] **Step 1:** README: install (`make build && ./bin/ccm install`, add the shell-init line), `add`/`login`, parallel use, `status`/`best`, T3 (`ccm t3-sync`, restart, `t3 up` for phone), MCP auto-share + secret-duplication trade-off, remote OAuth MCP servers need a one-time authorization per account, symlink experiment results, undocumented usage endpoint caveat, uninstall.
+- [ ] **Step 2: Live run with the user:** install → `ccm doctor` → `ccm add <second>` (user logs in) → `ccm main` and `ccm <second>` in two terminals at the same time, `/status` shows different emails → `ccm status` shows both + `ALL` → `ccm t3-sync`, restart T3, a thread per instance → `t3 up`, open from the phone → `claude mcp add -s user` a dummy server; a new `<second>` session lists it under `/mcp`; remove it and it's gone at the next launch → interactive `/config` change in an account: is `settings.json` still a symlink? Record in `docs/e2e-checklist.md`.
 - [ ] **Step 3:** Commit `docs: README and e2e checklist`.
