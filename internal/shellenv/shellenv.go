@@ -24,7 +24,9 @@ func UseScript(a registry.Account) string {
 
 const ccmFunc = `ccm() {
   if [ "$1" = "use" ]; then
-    eval "$(command ccm use "$2")"
+    local out
+    out="$(command ccm use "$2")" || return $?
+    eval "$out"
     return $?
   fi
   command ccm "$@"
@@ -38,7 +40,7 @@ func ShellInit(shell, accountsRoot string) (string, error) {
 	}
 	bin := accountsRoot + "/bin"
 	var guard string
-	if strings.ContainsAny(accountsRoot, "\"$`") {
+	if strings.ContainsAny(accountsRoot, "\"$`\\\n") {
 		q := quote(bin)
 		guard = fmt.Sprintf(`case ":$PATH:" in *":"%s":"*) ;; *) export PATH=%s:"$PATH";; esac`, q, q)
 	} else {

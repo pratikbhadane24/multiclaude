@@ -46,7 +46,8 @@ func TestShellInitContents(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, s := range []string{
-		`eval "$(command ccm use`,
+		`out="$(command ccm use "$2")" || return $?`,
+		`eval "$out"`,
 		`case ":$PATH:" in *":/r/accounts/bin:"*) ;; *) export PATH="/r/accounts/bin:$PATH";; esac`,
 		`command ccm "$@"`,
 		"ccm()",
