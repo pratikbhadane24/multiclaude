@@ -60,6 +60,9 @@ func TestReadCallsSecurity(t *testing.T) {
 func TestReadMainUsesBaseService(t *testing.T) {
 	f := fakeWith(run.Result{Code: 44}, nil)
 	_, _ = Read(context.Background(), f, registry.Account{Name: "main"})
+	if len(f.Calls) != 1 {
+		t.Fatalf("calls: %d", len(f.Calls))
+	}
 	if f.Calls[0].Args[2] != "Claude Code-credentials" {
 		t.Fatalf("args %v", f.Calls[0].Args)
 	}
@@ -80,6 +83,15 @@ func TestReadParsesCreds(t *testing.T) {
 	}
 	if c.AccessToken != "tok" || c.ExpiresAt != 1700000000000 || c.SubscriptionType != "max" || c.RateLimitTier != "t5" {
 		t.Fatalf("bad creds %+v", *c)
+	}
+}
+
+func TestReadNoTokenMeansLoggedOut(t *testing.T) {
+	for _, js := range []string{`{}`, `{"claudeAiOauth":{}}`, `{"claudeAiOauth":{"accessToken":""}}`} {
+		c, err := Read(context.Background(), fakeWith(run.Result{Stdout: js}, nil), registry.Account{Name: "w", Dir: workDir})
+		if c != nil || err != nil {
+			t.Fatalf("%s: got %v %v", js, c, err)
+		}
 	}
 }
 

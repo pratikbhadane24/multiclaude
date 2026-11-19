@@ -72,6 +72,9 @@ func Read(ctx context.Context, r run.Runner, a registry.Account) (*Creds, error)
 		return nil, ErrCredsParse
 	}
 	o := p.ClaudeAiOauth
+	if o.AccessToken == "" {
+		return nil, nil
+	}
 	return &Creds{
 		AccessToken:      o.AccessToken,
 		ExpiresAt:        o.ExpiresAt,
