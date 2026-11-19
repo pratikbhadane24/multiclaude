@@ -172,7 +172,7 @@ func TestListShowsAccountsAndLoginState(t *testing.T) {
 	e := newCLI(t, "")
 	e.main("list")
 	out := e.out.String()
-	for _, want := range []string{"NAME", "DIR", "EMAIL", "LOGGED IN", "main", e.p.ClaudeDir, "work", e.workDir, workEmail, "no"} {
+	for _, want := range []string{"NAME", "DIR", "EMAIL", "PLAN", "LOGGED IN", "main", e.p.ClaudeDir, "work", e.workDir, workEmail, "no"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing %q in:\n%s", want, out)
 		}

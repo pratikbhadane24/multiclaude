@@ -15,6 +15,8 @@ const (
 	shimName = "ccm-shim"
 	linkName = "ccm"
 	execMode = 0o755
+
+	privateMode = 0o700
 )
 
 // Result describes what Install changed.
@@ -40,6 +42,9 @@ func Install(p paths.Paths, selfExe, localBin string) (Result, error) {
 		return Result{}, fmt.Errorf("read %s: %w", shimSrc, err)
 	}
 
+	if err := ensureAccountsRoot(p.AccountsRoot); err != nil {
+		return Result{}, err
+	}
 	res := Result{ShimPath: p.ShimPath, CCMLink: filepath.Join(localBin, linkName)}
 	if res.ShimUpdated, err = writeShim(p.ShimPath, data); err != nil {
 		return Result{}, err
@@ -48,6 +53,24 @@ func Install(p paths.Paths, selfExe, localBin string) (Result, error) {
 		return Result{}, err
 	}
 	return res, nil
+}
+
+// ensureAccountsRoot creates root private (0700). An existing directory is
+// left as the user set it.
+func ensureAccountsRoot(root string) error {
+	if root == "" {
+		return nil
+	}
+	if _, err := os.Stat(root); err == nil {
+		return nil
+	}
+	if err := os.MkdirAll(root, privateMode); err != nil {
+		return fmt.Errorf("create %s: %w", root, err)
+	}
+	if err := os.Chmod(root, privateMode); err != nil {
+		return fmt.Errorf("chmod %s: %w", root, err)
+	}
+	return nil
 }
 
 func writeShim(dst string, data []byte) (bool, error) {

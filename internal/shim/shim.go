@@ -80,6 +80,11 @@ func lookupEnv(env []string, key string) string {
 // prepareAccount syncs MCP servers and reports replaced links. Failures are
 // only warnings: they must never block launching Claude.
 func prepareAccount(p paths.Paths, dir string, deps Deps) {
+	defer func() {
+		if r := recover(); r != nil {
+			warn(deps.Stderr, "internal error during sync: %v", r)
+		}
+	}()
 	if _, err := mcp.Sync(p, dir); err != nil {
 		warn(deps.Stderr, "MCP sync skipped: %v", err)
 	}
