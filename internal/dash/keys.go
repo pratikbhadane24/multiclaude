@@ -79,15 +79,20 @@ func (m Model) onListKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// toggleDuplicates flips duplicate rows and re-collects; a collection already
-// in flight is superseded (its snapshot no longer matches the setting).
+// toggleDuplicates flips duplicate rows and re-collects. A collection already
+// in flight is never joined by a second one: its snapshot is dropped when it
+// arrives (it no longer matches the setting) and one fresh collect follows.
 func (m Model) toggleDuplicates() (tea.Model, tea.Cmd) {
 	m.deps.ShowDuplicates = !m.deps.ShowDuplicates
-	m.loading = true
 	text := "hiding duplicate logins…"
 	if m.deps.ShowDuplicates {
 		text = "showing duplicate logins…"
 	}
+	if m.loading {
+		m.pendingCollect = true
+		return m.withToast(text), nil
+	}
+	m.loading = true
 	return m.withToast(text), m.collectCmd()
 }
 

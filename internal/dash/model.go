@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"multiclaude/internal/doctor"
+	"multiclaude/internal/status"
 )
 
 type mode int
@@ -33,11 +34,16 @@ type Model struct {
 	ctx  context.Context
 	deps Deps
 
-	snap        Snapshot
-	loaded      bool
-	loading     bool
-	lastRefresh time.Time
-	selected    int
+	snap Snapshot
+	// args caches each row's launch args, loaded once per snapshot.
+	args    map[string]accountArgs
+	loaded  bool
+	loading bool
+	// pendingCollect asks for one more collection once the one in flight
+	// ends (A pressed meanwhile); collections never overlap.
+	pendingCollect bool
+	lastRefresh    time.Time
+	selected       int
 
 	width, height int
 	mode          mode
@@ -105,8 +111,9 @@ func (m Model) step(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.resized(msg.Width, msg.Height), nil
 	case snapshotMsg:
 		if msg.showDuplicates != m.deps.ShowDuplicates {
-			return m, nil // collected before A was pressed; a fresh one is in flight
+			return m.afterStaleSnapshot()
 		}
+		m.pendingCollect = false
 		return m.withSnapshot(msg).afterSnapshot(msg)
 	case tickMsg:
 		return m.onTick()
@@ -149,6 +156,30 @@ func (m Model) withToast(text string) Model {
 	return m
 }
 
+// accountArgs is one account's launch args, or why they could not be read.
+type accountArgs struct {
+	args []string
+	err  error
+}
+
+// loadArgs reads every row's launch args (one config load each).
+func (m Model) loadArgs(rows []status.Row) map[string]accountArgs {
+	out := make(map[string]accountArgs, len(rows))
+	for _, r := range rows {
+		args, err := m.deps.ArgsFor(r.Account)
+		out[r.Account] = accountArgs{args: args, err: err}
+	}
+	return out
+}
+
+// argsFor returns name's launch args as of the last snapshot.
+func (m Model) argsFor(name string) ([]string, error) {
+	if c, ok := m.args[name]; ok {
+		return c.args, c.err
+	}
+	return m.deps.ArgsFor(name)
+}
+
 func (m Model) withSnapshot(msg snapshotMsg) Model {
 	m.loading = false
 	if msg.snap.Err != nil && m.loaded {
@@ -157,6 +188,7 @@ func (m Model) withSnapshot(msg snapshotMsg) Model {
 	}
 	name := m.selectedName()
 	m.snap, m.loaded, m.lastRefresh = msg.snap, true, msg.at
+	m.args = m.loadArgs(msg.snap.Rows)
 	m.selected = 0
 	for i, r := range m.snap.Rows {
 		if r.Account == name {
@@ -167,6 +199,16 @@ func (m Model) withSnapshot(msg snapshotMsg) Model {
 		return m.withToast("usage cache: " + msg.snap.CacheErr.Error())
 	}
 	return m
+}
+
+// afterStaleSnapshot drops a snapshot collected with the old duplicates
+// setting and, if A asked for it, starts the one collection that follows.
+func (m Model) afterStaleSnapshot() (Model, tea.Cmd) {
+	if !m.pendingCollect {
+		return m, nil // a fresh collect is already in flight
+	}
+	m.pendingCollect, m.loading = false, true
+	return m, m.collectCmd()
 }
 
 func (m Model) refresh() (Model, tea.Cmd) {
