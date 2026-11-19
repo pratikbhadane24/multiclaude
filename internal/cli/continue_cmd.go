@@ -62,7 +62,7 @@ func (a *App) collectUsage(ctx context.Context, accts []registry.Account, need b
 	if !need {
 		return nil
 	}
-	d := status.Deps{Accounts: accts, Fetch: a.fetcher().Fetch, Paths: a.Paths, Now: a.Now}
+	d := status.Deps{Accounts: accts, Fetch: a.fetcher().Fetch, Paths: a.Paths, Now: a.Now, EmailFallback: a.authEmail, ShowDuplicates: true}
 	rows, _ := status.Collect(ctx, d)
 	list := make([]usage.AccountUsage, len(rows))
 	for i, r := range rows {
@@ -126,7 +126,12 @@ func (a *App) latestSessionID(accts []registry.Account) (string, error) {
 	if !found {
 		mainAcct = registry.Account{Name: consts.MainName}
 	}
-	s, err := handoff.FindLatest(a.Paths, mainAcct, cwd)
+	live := handoff.LiveSessions(a.Paths, accts)
+	s, err := handoff.FindLatestExcluding(a.Paths, mainAcct, cwd, live)
+	var liveErr *handoff.LiveError
+	if errors.As(err, &liveErr) {
+		return "", liveErr
+	}
 	if errors.Is(err, handoff.ErrNoSession) {
 		return "", errNoConversation
 	}
@@ -145,7 +150,27 @@ func (a *App) dashLatestSession() (string, error) {
 	return a.latestSessionID(accts)
 }
 
+// loginGroup names the accounts signed in as the same login as from (from
+// excluded); usage identity decides, so it is empty without usage data.
+func loginGroup(list []usage.AccountUsage, from string) map[string]bool {
+	canon := usage.CanonicalIndex(list)
+	fromCanon := -1
+	for i, u := range list {
+		if u.Account == from {
+			fromCanon = canon[i]
+		}
+	}
+	group := map[string]bool{}
+	for i, u := range list {
+		if fromCanon >= 0 && canon[i] == fromCanon && u.Account != from {
+			group[u.Account] = true
+		}
+	}
+	return group
+}
+
 func (a *App) continueTarget(accts []registry.Account, list []usage.AccountUsage, from registry.Account, name string) (registry.Account, int, bool) {
+	sameGroup := loginGroup(list, from.Name)
 	if name != "" {
 		to, ok := registry.Find(accts, name)
 		if !ok {
@@ -154,11 +179,14 @@ func (a *App) continueTarget(accts []registry.Account, list []usage.AccountUsage
 		if to.Name == from.Name {
 			return registry.Account{}, a.errorf("--to and --from are the same account (%s)", from.Name), false
 		}
+		if sameGroup[to.Name] {
+			return registry.Account{}, a.errorf("--to %s is signed in as the same login as --from %s", to.Name, from.Name), false
+		}
 		return to, ExitOK, true
 	}
 	others := make([]usage.AccountUsage, 0, len(list))
 	for _, u := range list {
-		if u.Account != from.Name {
+		if u.Account != from.Name && !sameGroup[u.Account] {
 			others = append(others, u)
 		}
 	}

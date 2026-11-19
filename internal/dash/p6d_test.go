@@ -167,8 +167,10 @@ func TestLaunchConfigWarningToastsButStillLaunches(t *testing.T) {
 }
 
 func TestDetailsShowConfigErrorForArgs(t *testing.T) {
-	m, _ := newLoaded(t)
-	m.deps.ArgsFor = func(string) ([]string, error) { return nil, errors.New("boom") }
+	r := &recorder{snap: twoAccountSnapshot()}
+	deps := newTestDeps(r)
+	deps.ArgsFor = func(string) ([]string, error) { return nil, errors.New("boom") }
+	m := update(t, New(context.Background(), deps), snapshotMsg{snap: r.snap, at: testNow})
 
 	got := strings.Join(m.detailLines(), "\n")
 

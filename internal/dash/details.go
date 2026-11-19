@@ -91,7 +91,7 @@ func windowText(v status.WindowView, reset *time.Time, now time.Time) string {
 // argsLine is the details line for the launch args; a config that cannot be
 // read says so instead of showing nothing.
 func (m Model) argsLine(name string) string {
-	args, err := m.deps.ArgsFor(name)
+	args, err := m.argsFor(name)
 	if err != nil {
 		return styleBad.Render(argsConfigError)
 	}

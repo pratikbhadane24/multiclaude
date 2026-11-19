@@ -68,7 +68,7 @@ func (m Model) selectedArgs() []string {
 	if name == "" {
 		return nil
 	}
-	args, _ := m.deps.ArgsFor(name)
+	args, _ := m.argsFor(name)
 	return args
 }
 

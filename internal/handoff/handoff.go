@@ -32,9 +32,15 @@ type Session struct {
 	ModTime                       time.Time
 }
 
-// Slug converts a working directory to Claude's project directory name.
+// Slug converts a working directory to Claude's project directory name:
+// every rune that is not an ASCII letter or digit becomes "-".
 func Slug(cwd string) string {
-	return strings.NewReplacer("/", "-", ".", "-").Replace(cwd)
+	return strings.Map(func(r rune) rune {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' {
+			return r
+		}
+		return '-'
+	}, cwd)
 }
 
 // ConfigDir returns the config directory of an account.
@@ -47,36 +53,45 @@ func ConfigDir(p paths.Paths, a registry.Account) string {
 
 // FindLatest returns the newest session for cwd in account from.
 func FindLatest(p paths.Paths, from registry.Account, cwd string) (Session, error) {
-	projects := filepath.Join(ConfigDir(p, from), projectsDir)
-	if s, ok := newestIn(filepath.Join(projects, Slug(cwd)), from.Name, nil); ok {
-		return s, nil
-	}
-	var best Session
-	found := false
-	entries, _ := os.ReadDir(projects)
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		s, ok := newestIn(filepath.Join(projects, e.Name()), from.Name, func(path string) bool { return fileHasCwd(path, cwd) })
-		if ok && (!found || s.ModTime.After(best.ModTime)) {
-			best, found = s, true
-		}
-	}
-	if !found {
-		return Session{}, ErrNoSession
-	}
-	return best, nil
+	return FindLatestExcluding(p, from, cwd, nil)
 }
 
-// newestIn returns the newest *.jsonl in dir that passes accept (nil = all).
-func newestIn(dir, account string, accept func(path string) bool) (Session, bool) {
+// FindLatestExcluding is FindLatest ignoring the session ids in live. When
+// every candidate is live it returns a *LiveError naming the newest one.
+func FindLatestExcluding(p paths.Paths, from registry.Account, cwd string, live map[string]bool) (Session, error) {
+	projects := filepath.Join(ConfigDir(p, from), projectsDir)
+	var pick picker
+	pick.scan(filepath.Join(projects, Slug(cwd)), from.Name, live, nil)
+	if pick.hasBest {
+		return pick.best, nil
+	}
+	entries, _ := os.ReadDir(projects)
+	for _, e := range entries {
+		if e.IsDir() {
+			pick.scan(filepath.Join(projects, e.Name()), from.Name, live, func(path string) bool { return fileHasCwd(path, cwd) })
+		}
+	}
+	if pick.hasBest {
+		return pick.best, nil
+	}
+	if pick.hasLive {
+		return Session{}, &LiveError{ID: pick.newestLive.ID}
+	}
+	return Session{}, ErrNoSession
+}
+
+// picker tracks the newest idle and the newest live session across directories.
+type picker struct {
+	best, newestLive Session
+	hasBest, hasLive bool
+}
+
+// scan considers every *.jsonl in dir that passes accept (nil = all).
+func (k *picker) scan(dir, account string, live map[string]bool, accept func(path string) bool) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return Session{}, false
+		return
 	}
-	var best Session
-	found := false
 	for _, e := range entries {
 		name := e.Name()
 		if e.IsDir() || !strings.HasSuffix(name, jsonlExt) {
@@ -90,12 +105,17 @@ func newestIn(dir, account string, accept func(path string) bool) (Session, bool
 		if accept != nil && !accept(path) {
 			continue
 		}
-		if !found || info.ModTime().After(best.ModTime) {
-			best = Session{ID: strings.TrimSuffix(name, jsonlExt), Account: account, ProjectDir: dir, Path: path, ModTime: info.ModTime()}
-			found = true
+		s := Session{ID: strings.TrimSuffix(name, jsonlExt), Account: account, ProjectDir: dir, Path: path, ModTime: info.ModTime()}
+		if live[s.ID] {
+			if !k.hasLive || s.ModTime.After(k.newestLive.ModTime) {
+				k.newestLive, k.hasLive = s, true
+			}
+			continue
+		}
+		if !k.hasBest || s.ModTime.After(k.best.ModTime) {
+			k.best, k.hasBest = s, true
 		}
 	}
-	return best, found
 }
 
 // fileHasCwd reports whether one of the first lines carries "cwd" == cwd.

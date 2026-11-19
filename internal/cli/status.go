@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"multiclaude/internal/auth"
@@ -63,6 +64,32 @@ func (a *App) authEmail(ctx context.Context, acct registry.Account) string {
 	return st.Email
 }
 
+// cheapDeps is d without what the status line cache never uses: the token
+// scan of today and the `claude auth status` email lookups.
+func cheapDeps(d status.Deps) status.Deps {
+	d.Today, d.EmailFallback = nil, nil
+	return d
+}
+
+// memoEmail wraps an email lookup so each account is asked once.
+func memoEmail(lookup func(context.Context, registry.Account) string) func(context.Context, registry.Account) string {
+	var mu sync.Mutex
+	seen := map[string]string{}
+	return func(ctx context.Context, acct registry.Account) string {
+		mu.Lock()
+		email, ok := seen[acct.Name]
+		mu.Unlock()
+		if ok {
+			return email
+		}
+		email = lookup(ctx, acct)
+		mu.Lock()
+		seen[acct.Name] = email
+		mu.Unlock()
+		return email
+	}
+}
+
 const statusUsage = "status [--json] [--all] [--watch d] [--refresh-cache]"
 
 // cmdStatus handles `ccm status [--json] [--watch d]`.
@@ -89,6 +116,9 @@ func (a *App) cmdStatus(ctx context.Context, args []string) int {
 	}
 	d := a.statusDeps(accts)
 	d.ShowDuplicates = *showAll
+	if *refreshCache {
+		d = cheapDeps(d)
+	}
 	if watchSet {
 		return a.watchStatus(ctx, d, *watch)
 	}
@@ -131,6 +161,9 @@ func withWatchDefault(args []string) []string {
 func (a *App) watchStatus(ctx context.Context, d status.Deps, interval time.Duration) int {
 	if interval <= 0 {
 		interval = defaultWatch
+	}
+	if d.EmailFallback != nil {
+		d.EmailFallback = memoEmail(d.EmailFallback)
 	}
 	w := status.NewWatcher(a.Now)
 	ticker := time.NewTicker(interval)

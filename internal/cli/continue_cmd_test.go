@@ -38,7 +38,7 @@ func TestContinueDefaultsPickMostLimitedFromAndBestTo(t *testing.T) {
 	if got := e.out.String(); got != "Continuing sess-1 on work (from main)\n" {
 		t.Fatalf("out=%q", got)
 	}
-	calls := e.callsTo(e.p.RealClaude)
+	calls := e.resumeRuns()
 	if len(calls) != 1 || !reflect.DeepEqual(calls[0].Args, []string{"--model", "opus", "--resume", "sess-1"}) {
 		t.Fatalf("calls=%v", calls)
 	}
@@ -92,7 +92,7 @@ func TestContinueNoFreeAccountExits2(t *testing.T) {
 
 	code := e.main("continue")
 
-	if code != exitAllLimited || !strings.Contains(e.err.String(), "no free account to continue on") || len(e.callsTo(e.p.RealClaude)) != 0 {
+	if code != exitAllLimited || !strings.Contains(e.err.String(), "no free account to continue on") || len(e.resumeRuns()) != 0 {
 		t.Fatalf("code=%d err=%s", code, e.err)
 	}
 }

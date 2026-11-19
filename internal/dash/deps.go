@@ -45,6 +45,9 @@ type Deps struct {
 	// LatestSession returns the newest conversation id for the current folder
 	// (shared history), as `ccm continue` finds it.
 	LatestSession func() (string, error)
+	// NewSessionID returns a fresh session id (uuid v4) for a new
+	// conversation; nil launches without --session-id.
+	NewSessionID func() string
 	// Self builds a command that runs this ccm binary with args.
 	Self func(args ...string) *exec.Cmd
 	// SelfPath is the absolute ccm path used for new Terminal windows.
@@ -112,6 +115,8 @@ type (
 		label string
 		// account is set for a claude launch: the account that just ran.
 		account string
+		// session is the id the launch started its conversation with ("" if unknown).
+		session string
 		err     error
 	}
 	doctorMsg struct{ checks []doctor.Check }

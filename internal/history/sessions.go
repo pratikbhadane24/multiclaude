@@ -3,6 +3,7 @@ package history
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -37,13 +38,20 @@ func NeedsMerge(accountDir string) bool {
 }
 
 // HasLiveSession reports whether a Claude session may be running in the
-// account. Each file in <accountDir>/sessions names a pid (by file name or a
+// account (see LiveReason).
+func HasLiveSession(accountDir string, now time.Time) bool {
+	return LiveReason(accountDir, now) != ""
+}
+
+// LiveReason says what shows that a Claude session may be running in the
+// account ("" when none): "pid <n> (sessions/<file>)" or "recently modified
+// sessions/<file>". Each file in <accountDir>/sessions names a pid (by file name or a
 // "pid" field); a file whose pid cannot be determined counts as live when it
 // changed within the last 10 minutes.
-func HasLiveSession(accountDir string, now time.Time) bool {
+func LiveReason(accountDir string, now time.Time) string {
 	entries, err := os.ReadDir(filepath.Join(accountDir, sessionsDir))
 	if err != nil {
-		return false
+		return ""
 	}
 	for _, e := range entries {
 		if e.IsDir() {
@@ -52,15 +60,15 @@ func HasLiveSession(accountDir string, now time.Time) bool {
 		path := filepath.Join(accountDir, sessionsDir, e.Name())
 		if pid, ok := sessionPID(e.Name(), path); ok {
 			if pidAlive(pid) {
-				return true
+				return fmt.Sprintf("pid %d (%s/%s)", pid, sessionsDir, e.Name())
 			}
 			continue
 		}
 		if info, err := e.Info(); err == nil && now.Sub(info.ModTime()) < recentSessionWindow {
-			return true
+			return "recently modified " + sessionsDir + "/" + e.Name()
 		}
 	}
-	return false
+	return ""
 }
 
 func sessionPID(name, path string) (int, bool) {

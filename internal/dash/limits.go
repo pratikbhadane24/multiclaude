@@ -1,21 +1,28 @@
 package dash
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"multiclaude/internal/handoff"
 	"multiclaude/internal/status"
 )
 
-const resumeFlag = "--resume"
+const (
+	resumeFlag    = "--resume"
+	sessionIDFlag = "--session-id"
+)
 
 // target is a launch a confirm prompt may start; an empty name launches nothing.
 type target struct {
 	name string
 	// resume continues the latest conversation for this folder.
 	resume bool
+	// session is the exact conversation to resume ("" = the latest idle one).
+	session string
 }
 
 // confirm is a [y/N] question: y runs yes; n or ⏎ runs no; esc runs nothing.
@@ -55,7 +62,7 @@ func (m Model) enter(name string) (Model, tea.Cmd) {
 	lim := status.LimitedWindow(r)
 	best := m.bestName()
 	if lim == "" || best == "" || best == name {
-		return m.launch(name, nil)
+		return m.launchNew(name)
 	}
 	text := fmt.Sprintf("%s is limited (resets in %s). Start on %s? [y/N]", name, m.limitedReset(r, lim), best)
 	return m.ask(confirm{text: text, yes: target{name: best}, no: target{name: name}}), nil
@@ -90,20 +97,38 @@ func (m Model) start(t target) (Model, tea.Cmd) {
 		return m, nil
 	}
 	if !t.resume {
-		return m.launch(t.name, nil)
+		return m.launchNew(t.name)
 	}
-	if m.deps.LatestSession == nil {
-		return m.withToast("no conversation to continue"), nil
+	id, ok := t.session, true
+	var toast string
+	if id == "" {
+		id, toast, ok = m.latestSession()
 	}
-	id, err := m.deps.LatestSession()
-	if err != nil {
-		return m.withToast("cannot continue: " + err.Error()), nil
+	if !ok {
+		return m.withToast(toast), nil
 	}
-	next, cmd := m.launch(t.name, []string{resumeFlag, id})
+	next, cmd := m.launch(t.name, []string{resumeFlag, id}, "")
 	if cmd == nil {
 		return next, nil
 	}
 	return next.withToast(fmt.Sprintf("continuing %s on %s", id, t.name)), cmd
+}
+
+// latestSession looks up the newest idle conversation for this folder; on
+// failure it returns the toast to show.
+func (m Model) latestSession() (id, toast string, ok bool) {
+	if m.deps.LatestSession == nil {
+		return "", "no conversation to continue", false
+	}
+	id, err := m.deps.LatestSession()
+	var live *handoff.LiveError
+	switch {
+	case errors.As(err, &live):
+		return "", live.Error(), false
+	case err != nil:
+		return "", "cannot continue: " + err.Error(), false
+	}
+	return id, "", true
 }
 
 // handoffWindow is how long a handoff offer waits for the list to be visible.
@@ -127,7 +152,7 @@ func (m Model) afterSnapshot(msg snapshotMsg) (Model, tea.Cmd) {
 }
 
 func (m Model) clearHandoff() Model {
-	m.handoffFrom, m.handoffReady, m.handoffUntil = "", false, time.Time{}
+	m.handoffFrom, m.handoffSession, m.handoffReady, m.handoffUntil = "", "", false, time.Time{}
 	return m
 }
 
@@ -144,7 +169,7 @@ func (m Model) offerHandoff() Model {
 	if m.mode != modeList {
 		return m
 	}
-	from := m.handoffFrom
+	from, session := m.handoffFrom, m.handoffSession
 	m = m.clearHandoff()
 	r, ok := m.rowFor(from)
 	best := m.bestName()
@@ -152,5 +177,5 @@ func (m Model) offerHandoff() Model {
 		return m
 	}
 	text := fmt.Sprintf("Continue this conversation on %s? [y/N]", best)
-	return m.ask(confirm{text: text, yes: target{name: best, resume: true}})
+	return m.ask(confirm{text: text, yes: target{name: best, resume: true, session: session}})
 }
