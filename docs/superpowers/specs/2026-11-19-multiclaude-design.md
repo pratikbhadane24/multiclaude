@@ -139,7 +139,7 @@ TDD with `go test`, target 80%+: pure units (service-name hash, usage parsing/ag
 
 1. **MCP servers shared automatically (user decision: "shared automatically").** User-scope MCP servers live in `~/.claude.json`, which is per account, so symlinks can't carry them. Mechanism: a **launcher shim**, `~/.claude-accounts/bin/claude`, which every launch path goes through. `ccm run`/`best`, the zsh wrapper and T3 (`binaryPath` = shim) all use it.
    - The shim runs a fast MCP sync for `$CLAUDE_CONFIG_DIR` and then `exec`s the real `~/.local/bin/claude` with untouched args/env. Claude reads MCP config only at session start, so syncing at every launch = always current, with no daemon.
-   - The shim's shebang uses the absolute bun path, because T3's PATH may lack bun.
+   - The shim is a native Go binary (`ccm-shim`) installed as `~/.claude-accounts/bin/claude`, so it needs no interpreter on T3's PATH.
    - No-op when `CLAUDE_CONFIG_DIR` is unset or is `~/.claude` (main is the source).
    - Merge rule: account `mcpServers` = main's servers ∪ account-only servers. On a name clash, main wins. `~/.claude-accounts/state.json` remembers which names came from main, so removing a server in main removes it from accounts without touching account-only servers.
    - Write safety: compare first and write only when different, which is rare (right after MCP changes in main). Write = re-read file → change only the `mcpServers` key → temp file in the same dir (mode `0600`) → `rename`. If the file fails to parse, skip it with a warning on stderr and never block launch. A sync failure never prevents Claude from starting.
@@ -150,7 +150,7 @@ TDD with `go test`, target 80%+: pure units (service-name hash, usage parsing/ag
 3. **Symlink replaced by a real file (user: "handle it carefully").** Detection runs in `ccm doctor`, `ccm status` (one-line warning) and the shim (warning on stderr, never blocks).
    - Nothing is changed automatically.
    - `ccm doctor` shows the diff vs `~/.claude`.
-   - `ccm doctor --fix`: if the content is identical, re-link silently. If not, back up to `<file>.ccm-backup-<timestamp>`, re-link, and print the backup path so changes can be copied over by hand.
+   - `ccm doctor --fix`: if the content is identical, re-link silently. If not, back up to `<file>.ccm-backup-<unix>`, re-link, and print the backup path so changes can be copied over by hand.
    - Never merges into `~/.claude`. Never deletes a backup.
    - The first implementation task is an experiment: does Claude Code's save of `settings.json` / plugin installs replace symlinks? If it does for `settings.json`, the fallback is to link the parent dirs only where possible and document it. Result recorded in README.
 4. **Shell integration / statusline.** v1 does not edit `~/.zshrc` or `~/.claude/settings.json`. `ccm shell-init zsh` prints the wrapper function (makes `ccm use` affect the current shell, and exports `CCM_ACCOUNT` for prompts). The user adds `eval "$(ccm shell-init zsh)"` themselves. A Claude statusline showing the account is deferred.

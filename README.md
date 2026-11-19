@@ -9,7 +9,7 @@ macOS only (uses the Keychain). Go, stdlib only.
 ```sh
 # 1. Build and install
 make build
-./bin/ccm install            # puts ccm in ~/.local/bin, shim in ~/.claude-accounts/bin/claude
+./bin/ccm install            # symlinks ccm into ~/.local/bin, installs the ccm-shim binary as ~/.claude-accounts/bin/claude
 
 # 2. Add the shell-init line to ~/.zshrc (ccm never edits it for you)
 eval "$(ccm shell-init zsh)"
@@ -17,7 +17,7 @@ eval "$(ccm shell-init zsh)"
 # 3. Check the install
 ccm doctor
 
-# 4. Add a second account (creates its config dir, links your setup, opens the browser to log in)
+# 4. Add a second account (creates its dir, links your setup, copies a login link to the clipboard)
 ccm add work
 
 # 5. Use accounts in parallel, in different terminals
@@ -40,21 +40,45 @@ t3 up
 
 | Command | What it does |
 |---|---|
-| `ccm add <name> [--email e]` | Create an account dir, link the shared setup, sync MCP servers, register it, then log in. Re-runnable. |
-| `ccm login <name>` / `ccm login --all` | (Re)login. Opens the browser with the email pre-filled and verifies the signed-in email. `--all` handles every logged-out account. |
+| `ccm add <name> [--email e] [--open mode]` | Create the account dir, link shared setup, sync MCP servers, register it, then log in. Prompts for the email if `--email` is omitted. Re-runnable; skips login if already logged in as that email. |
+| `ccm login <name> [--open mode]` / `ccm login --all` | (Re)login and verify the signed-in email matches. `--all` logs in every logged-out account (`--all` cannot be combined with `--open`). |
 | `ccm list` | Accounts, email, plan, logged-in state. |
-| `ccm run <name> [args]` / `ccm <name> [args]` | Launch `claude` on that account. `main` uses the default config. |
-| `ccm best [args]` | Launch on the account with the most headroom (lowest max of 5h and 7d use). |
-| `ccm use <name>` | Switch the current shell to an account (needs the shell-init wrapper). Sets `CCM_ACCOUNT` for prompts. |
-| `ccm status [--json] [--watch N]` | Per-account 5h/7d used %, remaining %, reset time, today's tokens, plus a combined row. |
-| `ccm t3-sync` | Write one T3 Claude instance per account into `~/.t3/userdata/settings.json`. Idempotent; backs up first. Restart T3 afterwards. |
+| `ccm run <name> [claude args]` / `ccm <name> [claude args]` | Run `claude` as that account (`main` uses the default config). Exit code is the child's. |
+| `ccm best [claude args]` | Run on the account with the most headroom (lowest max of 5h and 7d use); prints the pick to stderr. Exit 2 if every account is limited. |
+| `ccm use <name>` | Print shell code that switches the current shell to the account (needs the `shell-init` wrapper). Sets `CCM_ACCOUNT`. |
+| `ccm shell-init zsh` | Print the zsh wrapper and PATH line for `~/.zshrc`. Only `zsh` is supported. |
+| `ccm status [--json] [--watch [d]]` | Per-account 5h/7d used %, reset time, today's tokens, plus a combined row. `--watch` refreshes (default `30s`, or a duration like `10s`). `--json` and `--watch` cannot be combined. |
 | `ccm sync` | Re-link new shared items from `~/.claude` and copy MCP servers into every account. |
-| `ccm shell-init zsh` | Print the zsh wrapper and PATH line. |
-| `ccm doctor [--fix]` | Check binaries, shim, links, MCP drift, Keychain entries, T3 config. `--fix` repairs; replaced files are backed up, never overwritten. |
-| `ccm remove <name> [--purge]` | Unregister (asks first). `--purge` also deletes the dir and its Keychain item, with confirmation. |
-| `ccm install` | Install `ccm` and the launcher shim. |
+| `ccm t3-sync` | Add or update one `claude-<account>` instance per account in `~/.t3/userdata/settings.json`. Idempotent. Prints the backup path when it changes the file. Restart T3 afterwards. |
+| `ccm doctor [--fix]` | Check binaries, shim, links, MCP drift, Keychain entries, T3 config. `--fix` re-links and re-syncs; a replaced file whose content differs is renamed to `<file>.ccm-backup-<unix>` first (identical copies are dropped). Exit 0 only if nothing fails or warns. |
+| `ccm remove <name> [--purge]` | Unregister after a `[y/N]` prompt. Files are kept. `--purge` also deletes the account dir and its Keychain item, but only for a direct, non-symlink child of `~/.claude-accounts` that does not contain `~/.claude` or `$HOME`. `main` cannot be removed. T3 instances are not removed. |
+| `ccm install` | Copy the native `ccm-shim` to `~/.claude-accounts/bin/claude` and symlink `ccm` into `~/.local/bin`. |
+| `ccm help` | Usage text. |
 
-Account names are `[a-z0-9-]+` and cannot match a subcommand.
+### Login link (`--open`)
+
+`add` and `login` take `--open copy|incognito|chrome:<Profile dir>`. The mode is stored per account and reused on later logins.
+
+| Mode | Behavior |
+|---|---|
+| `copy` (default) | The login link is copied to the clipboard and printed. No browser is opened. |
+| `incognito` | Open the link in a new Google Chrome incognito window. |
+| `chrome:<dir>` | Open the link in that Chrome profile directory, e.g. `chrome:"Profile 2"`. |
+
+Why not auto-open: the default browser is usually signed in to a different Claude account, so an automatic open can authorize the wrong one and attach it to the new account dir. With `copy` you paste the link into the profile or private window that is signed in to the right account. After login, ccm checks the email and exits 2 on a mismatch. If Chrome cannot be opened, ccm falls back to `copy`. Only Claude hosts are ever opened or copied.
+
+Account names are `[a-z0-9-]{1,32}` and cannot be a reserved name: `main add login list run best use status sync t3-sync doctor remove shell-init help install bin browser`.
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| 0 | OK |
+| 1 | Error (also `doctor` problems, declined `remove` prompt) |
+| 2 | Login email mismatch, or `best` with no usable account (all limited) |
+| 64 | Usage error (unknown command, bad flags or args) |
+| 130 | Cancelled (Ctrl-C at a prompt or watch) |
+| 128+N | `run`/`<name>`/`best`: the child `claude` was killed by signal N |
 
 ## How it works
 
@@ -63,7 +87,7 @@ Account names are `[a-z0-9-]+` and cannot match a subcommand.
 ~/.claude-accounts/
   accounts.json            registry
   state.json               which MCP servers came from main
-  bin/claude               launcher shim (syncs MCP, then execs the real claude)
+  bin/claude               native Go shim `ccm-shim` (syncs MCP, then execs the real claude)
   <name>/                  CLAUDE_CONFIG_DIR for that account
     .claude.json  projects/  history.jsonl  sessions/   per account
     CLAUDE.md settings.json rules/ skills/ plugins/ agents/ commands/ hooks/ ...
@@ -80,7 +104,7 @@ Account names are `[a-z0-9-]+` and cannot match a subcommand.
 ## Safety
 
 - Never writes `~/.claude` or `~/.claude.json`. Main is only read.
-- Existing files are backed up before change (T3 settings; replaced symlinks become `<file>.ccm-backup-<timestamp>` and backups are never deleted).
+- Existing files are backed up before change: T3 settings become `settings.json.ccm-backup-<unix>`; replaced links become `<file>.ccm-backup-<unix>`. Backups are never deleted.
 - Nothing is changed automatically when a link has been replaced by a file: `ccm doctor` shows it, `doctor --fix` backs up and re-links.
 - Tokens stay in the macOS Keychain (read with `/usr/bin/security`) and in memory. They are never logged, printed, written to files, or included in `--json`. They are sent only to `api.anthropic.com`.
 - `ccm` never calls the OAuth refresh endpoint itself.
@@ -104,4 +128,4 @@ rm -rf ~/.claude-accounts    # registry, shim, and any remaining account dirs
 # remove the eval "$(ccm shell-init zsh)" line from ~/.zshrc
 ```
 
-Then rerun T3 settings cleanup if you want: delete the `claude-<account>` entries from `providerInstances` in `~/.t3/userdata/settings.json` (a `.bak` from `t3-sync` is next to it). `~/.claude` is untouched throughout.
+Then rerun T3 settings cleanup if you want: delete the `claude-<account>` entries from `providerInstances` in `~/.t3/userdata/settings.json` (`settings.json.ccm-backup-<unix>` from `t3-sync` is next to it). `~/.claude` is untouched throughout.
