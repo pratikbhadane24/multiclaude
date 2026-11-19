@@ -17,7 +17,11 @@ func duplicateChecks(ctx context.Context, d Deps) []Check {
 	list := make([]usage.AccountUsage, len(d.Accounts))
 	for i, a := range d.Accounts {
 		uuid, email := d.Identity(ctx, a)
-		list[i] = usage.AccountUsage{Account: a.Name, Email: email, AccountUUID: uuid, State: usage.StateOK}
+		state := usage.StateOK
+		if uuid == "" && email == "" {
+			state = usage.StateLoggedOut // unknown login never merges
+		}
+		list[i] = usage.AccountUsage{Account: a.Name, Email: email, AccountUUID: uuid, State: state}
 	}
 	var out []Check
 	for i, canon := range usage.CanonicalIndex(list) {
