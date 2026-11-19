@@ -8,6 +8,8 @@ Run with the user. Fill in Result/Notes during the run.
   - Result:
 - [ ] `ccm add <second>`; user logs in; email matches
   - Result:
+- [ ] Login safety: `ccm login <name>` with default `copy` mode; browser does not open, link is on the clipboard; paste into the right profile or private window and sign in; `ccm list` shows the correct email
+  - Result:
 - [ ] Parallel: `ccm main` and `ccm <second>` in two terminals at once; `/status` shows different emails
   - Result:
 - [ ] `ccm status` shows both accounts plus the `ALL` row
