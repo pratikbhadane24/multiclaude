@@ -17,14 +17,14 @@ import (
 const accountDirMode = 0o700
 
 // resolveEmail picks the email from the argument, the existing entry, or a prompt.
-func (a *App) resolveEmail(name, email string, existing registry.Account) (string, error) {
+func (a *App) resolveEmail(ctx context.Context, name, email string, existing registry.Account) (string, error) {
 	if email == "" {
 		email = existing.Email
 	}
 	if email != "" {
 		return email, nil
 	}
-	email, err := a.promptLine(fmt.Sprintf("Email for account %q: ", name))
+	email, err := a.promptLine(ctx, fmt.Sprintf("Email for account %q: ", name))
 	if err != nil || email == "" {
 		return "", fmt.Errorf("an email is required for account %q", name)
 	}
@@ -59,7 +59,7 @@ func (a *App) AddWith(ctx context.Context, name, email, open string) int {
 		return a.errorf("%v", err)
 	}
 	existing, _ := registry.Find(accts, name)
-	email, err = a.resolveEmail(name, email, existing)
+	email, err = a.resolveEmail(ctx, name, email, existing)
 	if err != nil {
 		return a.errorf("%v", err)
 	}

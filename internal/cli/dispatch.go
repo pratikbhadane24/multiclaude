@@ -77,7 +77,9 @@ func (a *App) Main(ctx context.Context, args []string) int {
 func (a *App) runRegistered(ctx context.Context, name string, args []string) int {
 	accts, err := registry.Load(a.Paths)
 	if err != nil {
-		return a.errorf("%v", err)
+		// Not a known command and accounts are unreadable: report usage, not a registry failure.
+		fmt.Fprintf(a.Err, "ccm: unknown command %q (account registry unreadable: %v)\n\n%s", name, err, usageText)
+		return ExitUsage
 	}
 	if acct, ok := registry.Find(accts, name); ok {
 		return a.runAccount(ctx, acct, args)
@@ -151,4 +153,18 @@ func (a *App) findAccount(name string) (registry.Account, int, bool) {
 		return registry.Account{}, a.errorf("unknown account %q", name), false
 	}
 	return acct, ExitOK, true
+}
+
+// interruptFree lists commands that never block on input or a child, so the
+// default SIGINT behaviour (terminate) is right for them.
+var interruptFree = map[string]bool{
+	"list": true, "use": true, "sync": true, "t3-sync": true, "doctor": true,
+	"shell-init": true, "install": true, "help": true, "-h": true, "--help": true,
+}
+
+// HandlesInterrupt reports whether the command wants SIGINT delivered as a
+// cancelled context (prompts, watch loops, foreground children) instead of
+// terminating the process.
+func HandlesInterrupt(args []string) bool {
+	return len(args) > 0 && !interruptFree[args[0]]
 }

@@ -42,7 +42,10 @@ func main() {
 		fmt.Fprintf(os.Stderr, "ccm: home dir: %v\n", err)
 		os.Exit(cli.ExitError)
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := context.Background(), func() {}
+	if cli.HandlesInterrupt(os.Args[1:]) {
+		ctx, stop = signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	}
 	app := &cli.App{
 		Paths:  paths.Resolve(os.Getenv, home),
 		Runner: run.OS,

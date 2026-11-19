@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"syscall"
 )
 
 // Result is the outcome of a process that ran to completion.
@@ -42,13 +43,23 @@ func (OSRunner) Run(ctx context.Context, name string, args []string, env []strin
 	res := Result{Stdout: stdout.String(), Stderr: stderr.String()}
 	var exitErr *exec.ExitError
 	if errors.As(err, &exitErr) {
-		res.Code = exitErr.ExitCode()
+		res.Code = exitCode(exitErr)
 		return res, nil
 	}
 	if err != nil {
 		return Result{}, fmt.Errorf("run %s: %w", name, err)
 	}
 	return res, nil
+}
+
+// signalExitBase is the shell convention for a child killed by a signal.
+const signalExitBase = 128
+
+func exitCode(e *exec.ExitError) int {
+	if ws, ok := e.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
+		return signalExitBase + int(ws.Signal())
+	}
+	return e.ExitCode()
 }
 
 // Call records one invocation made through Fake.

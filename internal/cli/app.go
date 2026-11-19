@@ -3,6 +3,7 @@ package cli
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,6 +19,8 @@ const (
 	ExitOK       = 0
 	ExitError    = 1
 	ExitMismatch = 2
+	// ExitInterrupted is the shell convention for SIGINT (128+2).
+	ExitInterrupted = 130
 )
 
 // App holds shared dependencies for all commands.
@@ -47,14 +50,28 @@ func (a *App) printf(format string, args ...any) {
 }
 
 // promptLine writes prompt to Out and reads one trimmed line from In.
-func (a *App) promptLine(prompt string) (string, error) {
+// It returns ctx.Err() as soon as ctx is cancelled, even while blocked on input.
+func (a *App) promptLine(ctx context.Context, prompt string) (string, error) {
 	fmt.Fprint(a.Out, prompt)
 	if a.In == nil {
 		return "", io.EOF
 	}
-	line, err := bufio.NewReader(a.In).ReadString('\n')
-	if err != nil && line == "" {
-		return "", err
+	type result struct {
+		line string
+		err  error
 	}
-	return strings.TrimSpace(line), nil
+	ch := make(chan result, 1)
+	go func() {
+		line, err := bufio.NewReader(a.In).ReadString('\n')
+		ch <- result{line, err}
+	}()
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	case r := <-ch:
+		if r.err != nil && r.line == "" {
+			return "", r.err
+		}
+		return strings.TrimSpace(r.line), nil
+	}
 }

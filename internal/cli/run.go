@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"multiclaude/internal/auth"
 	"multiclaude/internal/registry"
@@ -16,7 +17,7 @@ const exitAllLimited = 2
 
 // cmdRun handles `ccm run <name> [claude args...]`; args pass through verbatim.
 func (a *App) cmdRun(ctx context.Context, args []string) int {
-	if len(args) == 0 {
+	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
 		return a.usageErr("run <name> [claude args...]")
 	}
 	acct, code, ok := a.findAccount(args[0])
@@ -64,6 +65,6 @@ func (a *App) noBest(c usage.Combined) int {
 		fmt.Fprintln(a.Err, "ccm: no usable accounts")
 		return exitAllLimited
 	}
-	fmt.Fprintf(a.Err, "ccm: all accounts limited; next reset in %s\n", status.FormatDuration(c.NextResetAt.Sub(a.Now())))
+	fmt.Fprintf(a.Err, "ccm: all accounts limited; next reset in %s\n", status.FormatDuration(max(0, c.NextResetAt.Sub(a.Now()))))
 	return exitAllLimited
 }
