@@ -2,7 +2,7 @@
 
 Run several Claude Code subscription accounts (OAuth, no API keys) in parallel on one Mac. One shared setup, per-account logins, per-account and combined plan limits, and every account available as a T3 Code instance.
 
-macOS only (uses the Keychain). Go, stdlib only.
+macOS only (uses the Keychain). Go, stdlib + golang.org/x/text.
 
 ## Quick start
 
@@ -10,6 +10,7 @@ macOS only (uses the Keychain). Go, stdlib only.
 # 1. Build and install
 make build
 ./bin/ccm install            # symlinks ccm into ~/.local/bin, installs the ccm-shim binary as ~/.claude-accounts/bin/claude
+                             # after every `make build`, re-run `ccm install` to update the launcher (it is a copy)
 
 # 2. Add the shell-init line to ~/.zshrc (ccm never edits it for you)
 eval "$(ccm shell-init zsh)"
@@ -42,12 +43,12 @@ t3 up
 |---|---|
 | `ccm add <name> [--email e] [--open mode]` | Create the account dir, link shared setup, sync MCP servers, register it, then log in. Prompts for the email if `--email` is omitted. Re-runnable; skips login if already logged in as that email. |
 | `ccm login <name> [--open mode]` / `ccm login --all` | (Re)login and verify the signed-in email matches. `--all` logs in every logged-out account (`--all` cannot be combined with `--open`). |
-| `ccm list` | Accounts, email, plan, logged-in state. |
+| `ccm list` | Table with columns `NAME  DIR  EMAIL  PLAN  LOGGED IN` (plan comes from the account's `claude auth status`). |
 | `ccm run <name> [claude args]` / `ccm <name> [claude args]` | Run `claude` as that account (`main` uses the default config). Exit code is the child's. |
 | `ccm best [claude args]` | Run on the account with the most headroom (lowest max of 5h and 7d use); prints the pick to stderr. Exit 2 if every account is limited. |
 | `ccm use <name>` | Print shell code that switches the current shell to the account (needs the `shell-init` wrapper). Sets `CCM_ACCOUNT`. |
 | `ccm shell-init zsh` | Print the zsh wrapper and PATH line for `~/.zshrc`. Only `zsh` is supported. |
-| `ccm status [--json] [--watch [d]]` | Per-account 5h/7d used %, reset time, today's tokens, plus a combined row. `--watch` refreshes (default `30s`, or a duration like `10s`). `--json` and `--watch` cannot be combined. |
+| `ccm status [--json] [--watch [d]]` | Per-account table: `ACCOUNT EMAIL PLAN 5H USED/LEFT/RESET 7D USED/LEFT/RESET TODAY TOK STATE`, plus a combined `ALL` row. Adds `7D OPUS` and `7D SONNET` (used %) columns when the API reports those windows. `STATE` shows `limited (5h)` or `limited (7d)` when a window is at 100%. `--json` adds `seven_day_opus`, `seven_day_sonnet` and `limited` per account. `--watch` refreshes (default `30s`, or a duration like `10s`). `--json` and `--watch` cannot be combined. |
 | `ccm sync` | Re-link new shared items from `~/.claude` and copy MCP servers into every account. |
 | `ccm t3-sync` | Add or update one `claude-<account>` instance per account in `~/.t3/userdata/settings.json`. Idempotent. Prints the backup path when it changes the file. Restart T3 afterwards. |
 | `ccm doctor [--fix]` | Check binaries, shim, links, MCP drift, Keychain entries, T3 config. `--fix` re-links and re-syncs; a replaced file whose content differs is renamed to `<file>.ccm-backup-<unix>` first (identical copies are dropped). Exit 0 only if nothing fails or warns. |
@@ -96,7 +97,7 @@ Account names are `[a-z0-9-]{1,32}` and cannot be a reserved name: `main add log
 
 - **Isolation:** each account runs with its own `CLAUDE_CONFIG_DIR`. Claude Code stores that account's OAuth token in the Keychain under `Claude Code-credentials-<first 8 hex of sha256(config dir)>`. `main` (no variable set) uses plain `Claude Code-credentials`. Logins never overwrite each other and running sessions never change account.
 - **Shared (via symlinks, edit once in `~/.claude`):** CLAUDE.md, settings.json, rules, skills, plugins, agents, commands, hooks, output-styles, keybindings.
-- **Shared (via the shim):** user-scope MCP servers. They live in `.claude.json`, which is per account, so symlinks cannot carry them. Every launch goes through `~/.claude-accounts/bin/claude`, which merges main's `mcpServers` into the account's file (main wins on name clashes, account-only servers are kept), then execs the real `claude`. `ccm`, the zsh wrapper and T3 all use the shim. A sync failure never blocks launch.
+- **Shared (via the shim):** user-scope MCP servers. They live in `.claude.json`, which is per account, so symlinks cannot carry them. Every launch goes through `~/.claude-accounts/bin/claude`, which merges main's `mcpServers` into the account's file (main wins on name clashes, account-only servers are kept), then execs the real `claude`. `ccm`, the zsh wrapper and T3 all use the shim. A sync failure (or an internal error in it) never blocks launch. If an account's `.claude.json` is a symlink, the MCP sync replaces it with a regular file.
 - **Per account:** login, `.claude.json` (onboarding, project trust), transcripts and auto-memory under `projects/`, history, sessions.
 - **Usage:** `ccm status` reads each account's token from the Keychain and queries the usage endpoint. Expired tokens are refreshed only by running the official `claude auth status` for that account.
 - **T3 Code:** `ccm t3-sync` adds `claude-<account>` instances (driver `claudeAgent`, `binaryPath` = the shim, `homePath` = the account dir) and leaves other entries alone.

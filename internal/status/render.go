@@ -11,13 +11,48 @@ import (
 )
 
 const (
-	tabPad = 2
-	header = "ACCOUNT\tEMAIL\tPLAN\t5H USED\t5H LEFT\t5H RESET\t7D USED\t7D LEFT\t7D RESET\tTODAY TOK\tSTATE"
+	tabPad     = 2
+	headerHead = "ACCOUNT\tEMAIL\tPLAN\t5H USED\t5H LEFT\t5H RESET\t7D USED\t7D LEFT\t7D RESET"
+	modelCols  = "\t7D OPUS\t7D SONNET"
+	headerTail = "\tTODAY TOK\tSTATE"
 )
+
+// limitedWindow returns "5h" or "7d" when that window is fully used.
+func limitedWindow(r Row) string {
+	if r.State != usage.StateOK && r.State != usage.StateExpiredRefreshed || r.Usage == nil {
+		return ""
+	}
+	if p := r.Usage.FiveHour.UsedPct; p != nil && *p >= fullPct {
+		return "5h"
+	}
+	if p := r.Usage.SevenDay.UsedPct; p != nil && *p >= fullPct {
+		return "7d"
+	}
+	return ""
+}
+
+func hasModelWindows(rows []Row) bool {
+	for _, r := range rows {
+		if r.Usage != nil && (r.Usage.SevenDayOpus != nil || r.Usage.SevenDaySonnet != nil) {
+			return true
+		}
+	}
+	return false
+}
+
+func modelPct(w *usage.Window) string {
+	if w == nil {
+		return ""
+	}
+	return fmtPct(w.UsedPct)
+}
 
 func todayTotal(t tokens.Tokens) int64 { return t.Input + t.Output + t.CacheRead + t.CacheWrite }
 
 func stateText(r Row) string {
+	if lim := limitedWindow(r); lim != "" {
+		return "limited (" + lim + ")"
+	}
 	switch r.State {
 	case usage.StateOK:
 		return "ok"
@@ -39,7 +74,7 @@ func todayText(r Row) string {
 	return humanize(todayTotal(r.Today))
 }
 
-func rowLine(r Row, now time.Time) string {
+func rowLine(r Row, now time.Time, withModels bool) string {
 	var five, seven usage.Window
 	if r.Usage != nil {
 		five, seven = r.Usage.FiveHour, r.Usage.SevenDay
@@ -48,8 +83,15 @@ func rowLine(r Row, now time.Time) string {
 		r.Account, r.Email, r.Plan,
 		fmtPct(five.UsedPct), fmtLeft(five.UsedPct), fmtReset(five.ResetsAt, now),
 		fmtPct(seven.UsedPct), fmtLeft(seven.UsedPct), fmtReset(seven.ResetsAt, now),
-		todayText(r), stateText(r),
 	}
+	if withModels {
+		var opus, sonnet *usage.Window
+		if r.Usage != nil {
+			opus, sonnet = r.Usage.SevenDayOpus, r.Usage.SevenDaySonnet
+		}
+		cols = append(cols, modelPct(opus), modelPct(sonnet))
+	}
+	cols = append(cols, todayText(r), stateText(r))
 	for i, c := range cols {
 		if c == "" {
 			cols[i] = "-"
@@ -83,9 +125,14 @@ func allLine(c usage.Combined, now time.Time) string {
 func Render(rows []Row, c usage.Combined, now time.Time) string {
 	var b strings.Builder
 	tw := tabwriter.NewWriter(&b, 0, 0, tabPad, ' ', 0)
-	fmt.Fprintln(tw, header)
+	withModels := hasModelWindows(rows)
+	head := headerHead
+	if withModels {
+		head += modelCols
+	}
+	fmt.Fprintln(tw, head+headerTail)
 	for _, r := range rows {
-		fmt.Fprintln(tw, rowLine(r, now))
+		fmt.Fprintln(tw, rowLine(r, now, withModels))
 	}
 	_ = tw.Flush()
 	b.WriteString(allLine(c, now) + "\n")

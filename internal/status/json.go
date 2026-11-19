@@ -21,6 +21,9 @@ type jsonRow struct {
 	Error        string      `json:"error,omitempty"`
 	FiveHour     *jsonWindow `json:"five_hour"`
 	SevenDay     *jsonWindow `json:"seven_day"`
+	SevenOpus    *jsonWindow `json:"seven_day_opus"`
+	SevenSonnet  *jsonWindow `json:"seven_day_sonnet"`
+	Limited      bool        `json:"limited"`
 	TodayTokens  int64       `json:"today_tokens"`
 	Input        int64       `json:"today_input"`
 	Output       int64       `json:"today_output"`
@@ -40,6 +43,13 @@ type jsonCombined struct {
 	NextResetAt  *time.Time `json:"next_reset_at"`
 }
 
+func toJSONWindow(w *usage.Window) *jsonWindow {
+	if w == nil {
+		return nil
+	}
+	return &jsonWindow{w.UsedPct, w.ResetsAt}
+}
+
 func toJSONRow(r Row) jsonRow {
 	jr := jsonRow{
 		Account: r.Account, Email: r.Email, Plan: r.Plan, State: string(r.State), Error: r.Err,
@@ -50,6 +60,9 @@ func toJSONRow(r Row) jsonRow {
 	if r.Usage != nil {
 		jr.FiveHour = &jsonWindow{r.Usage.FiveHour.UsedPct, r.Usage.FiveHour.ResetsAt}
 		jr.SevenDay = &jsonWindow{r.Usage.SevenDay.UsedPct, r.Usage.SevenDay.ResetsAt}
+		jr.SevenOpus = toJSONWindow(r.Usage.SevenDayOpus)
+		jr.SevenSonnet = toJSONWindow(r.Usage.SevenDaySonnet)
+		jr.Limited = limitedWindow(r) != ""
 	}
 	return jr
 }

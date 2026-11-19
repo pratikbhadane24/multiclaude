@@ -56,6 +56,24 @@ type payload struct {
 	} `json:"claudeAiOauth"`
 }
 
+const notFoundCode = 44
+
+// Present reports whether the account's keychain item exists without
+// reading the secret (no -w).
+func Present(ctx context.Context, r run.Runner, a registry.Account) (bool, error) {
+	res, err := r.Run(ctx, securityBin, []string{"find-generic-password", "-s", Service(a.Dir)}, nil, false)
+	if err != nil {
+		return false, fmt.Errorf("keychain: run security: %w", err)
+	}
+	switch res.Code {
+	case 0:
+		return true, nil
+	case notFoundCode:
+		return false, nil
+	}
+	return false, fmt.Errorf("keychain: security exited %d", res.Code)
+}
+
 // Read fetches an account's credentials. It returns nil, nil when the
 // keychain entry is absent (security exits non-zero).
 func Read(ctx context.Context, r run.Runner, a registry.Account) (*Creds, error) {

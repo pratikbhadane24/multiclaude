@@ -44,8 +44,7 @@ func (a *App) doctorDeps(accts []registry.Account) doctor.Deps {
 		MCPDrift:     mcp.Drift,
 		MCPSync:      mcp.Sync,
 		KeychainPresent: func(ctx context.Context, acct registry.Account) (bool, error) {
-			c, err := keychain.Read(ctx, a.Runner, acct)
-			return c != nil, err
+			return keychain.Present(ctx, a.Runner, acct)
 		},
 		T3HasInstance: func(acct registry.Account) (bool, error) {
 			return t3.HasInstance(a.Paths, acct, a.Paths.ShimPath)

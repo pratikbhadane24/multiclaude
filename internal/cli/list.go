@@ -22,11 +22,12 @@ func (a *App) cmdList(ctx context.Context, args []string) int {
 	if err != nil {
 		return a.errorf("%v", err)
 	}
-	states := a.loginStates(ctx, accts)
+	results := a.loginResults(ctx, accts)
 	tw := tabwriter.NewWriter(a.Out, 0, 0, listPad, ' ', 0)
-	fmt.Fprintln(tw, "NAME\tDIR\tEMAIL\tLOGGED IN")
+	fmt.Fprintln(tw, "NAME\tDIR\tEMAIL\tPLAN\tLOGGED IN")
 	for i, acct := range accts {
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", acct.Name, a.accountDir(acct), dash(acct.Email), states[i])
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", acct.Name, a.accountDir(acct), dash(acct.Email),
+			dash(planText(results[i])), loginText(acct, results[i]))
 	}
 	if err := tw.Flush(); err != nil {
 		return a.errorf("write list: %v", err)
@@ -34,15 +35,15 @@ func (a *App) cmdList(ctx context.Context, args []string) int {
 	return ExitOK
 }
 
-// loginStates checks every account concurrently, preserving order.
-func (a *App) loginStates(ctx context.Context, accts []registry.Account) []string {
-	out := make([]string, len(accts))
+// loginResults checks every account concurrently, preserving order.
+func (a *App) loginResults(ctx context.Context, accts []registry.Account) []loginResult {
+	out := make([]loginResult, len(accts))
 	var wg sync.WaitGroup
 	for i, acct := range accts {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			out[i] = loginText(acct, a.statusOf(ctx, acct))
+			out[i] = a.statusOf(ctx, acct)
 		}()
 	}
 	wg.Wait()
@@ -57,6 +58,13 @@ type loginResult struct {
 func (a *App) statusOf(ctx context.Context, acct registry.Account) loginResult {
 	st, err := auth.GetStatus(ctx, a.Runner, a.Paths, acct)
 	return loginResult{st, err}
+}
+
+func planText(r loginResult) string {
+	if r.err != nil || !r.st.LoggedIn {
+		return ""
+	}
+	return r.st.SubscriptionType
 }
 
 func loginText(acct registry.Account, r loginResult) string {
