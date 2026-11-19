@@ -24,7 +24,11 @@ Commands:
   use <name>                    print shell code that switches account
   status [--json] [--watch d]   show plan usage per account (watch: default 30s)
   sync                          link shared config and sync MCP servers
-  t3-sync                       add every account to T3 Code
+  t3-sync                       add every account to T3 Code (and sync launch args)
+  config show                   show default and per-account claude args
+  config set default-args <args...>      args added to every launch (e.g. --dangerously-skip-permissions)
+  config set args <account> <args...>    extra args for one account
+  config clear default-args | args <account>
   doctor [--fix]                check (and repair) the setup
   remove <name> [--purge]       unregister an account (--purge deletes its data)
   shell-init zsh                print shell integration for ~/.zshrc
@@ -50,6 +54,7 @@ var commands = map[string]handler{
 	"status":     (*App).cmdStatus,
 	"sync":       (*App).cmdSync,
 	"t3-sync":    (*App).cmdT3Sync,
+	"config":     (*App).cmdConfig,
 	"doctor":     (*App).cmdDoctor,
 	"remove":     (*App).cmdRemove,
 	"shell-init": (*App).cmdShellInit,
@@ -159,7 +164,7 @@ func (a *App) findAccount(name string) (registry.Account, int, bool) {
 // default SIGINT behaviour (terminate) is right for them.
 var interruptFree = map[string]bool{
 	"list": true, "use": true, "sync": true, "t3-sync": true, "doctor": true,
-	"shell-init": true, "install": true, "help": true, "-h": true, "--help": true,
+	"shell-init": true, "install": true, "config": true, "help": true, "-h": true, "--help": true,
 }
 
 // HandlesInterrupt reports whether the command wants SIGINT delivered as a

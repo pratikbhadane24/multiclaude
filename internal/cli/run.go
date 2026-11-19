@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"multiclaude/internal/auth"
+	"multiclaude/internal/config"
 	"multiclaude/internal/registry"
 	"multiclaude/internal/status"
 	"multiclaude/internal/usage"
@@ -30,8 +31,16 @@ func (a *App) cmdRun(ctx context.Context, args []string) int {
 // runAccount runs claude as acct with inherited stdio and returns its exit
 // code. The child is not tied to ctx: an interrupt is delivered to it by the
 // terminal and it decides how to exit.
+//
+// The configured default and per-account args are prepended to args; a broken
+// config is reported and the launch continues without it.
 func (a *App) runAccount(ctx context.Context, acct registry.Account, args []string) int {
-	res, err := a.Runner.Run(context.WithoutCancel(ctx), auth.Binary(a.Paths), args, auth.Env(acct, os.Environ()), true)
+	cfg, err := config.Load(a.Paths)
+	if err != nil {
+		a.warnf("ignoring config: %v", err)
+	}
+	argv := config.MergedArgs(cfg, acct.Name, args)
+	res, err := a.Runner.Run(context.WithoutCancel(ctx), auth.Binary(a.Paths), argv, auth.Env(acct, os.Environ()), true)
 	if err != nil {
 		return a.errorf("run claude as %s: %v", acct.Name, err)
 	}

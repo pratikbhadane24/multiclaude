@@ -49,7 +49,18 @@ func (a *App) statusDeps(accts []registry.Account) status.Deps {
 		Inspect:  inspectShared,
 		Paths:    a.Paths,
 		Now:      a.Now,
+
+		EmailFallback: a.authEmail,
 	}
+}
+
+// authEmail asks `claude auth status` for the account's email; "" on any failure.
+func (a *App) authEmail(ctx context.Context, acct registry.Account) string {
+	st, err := auth.GetStatus(ctx, a.Runner, a.Paths, acct)
+	if err != nil || !st.LoggedIn {
+		return ""
+	}
+	return st.Email
 }
 
 // cmdStatus handles `ccm status [--json] [--watch d]`.

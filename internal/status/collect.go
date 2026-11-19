@@ -24,6 +24,9 @@ type Deps struct {
 	Inspect  func(p paths.Paths, dir string) ([]links.Item, error)
 	Paths    paths.Paths
 	Now      func() time.Time
+	// EmailFallback (optional) supplies an email when neither the usage result
+	// nor the registry has one (e.g. main). Failures return "".
+	EmailFallback func(ctx context.Context, a registry.Account) string
 }
 
 // Row is one rendered account line.
@@ -49,6 +52,9 @@ func collectOne(ctx context.Context, d Deps, a registry.Account) Row {
 	}
 	if au.Email == "" {
 		au.Email = a.Email
+	}
+	if au.Email == "" && d.EmailFallback != nil {
+		au.Email = d.EmailFallback(ctx, a)
 	}
 	row := Row{AccountUsage: au}
 	dir := accountDir(d, a)
