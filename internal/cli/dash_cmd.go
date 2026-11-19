@@ -102,7 +102,8 @@ func (a *App) dashCollect(ctx context.Context) dashboard.Snapshot {
 		return dashboard.Snapshot{Err: err}
 	}
 	rows, combined := status.Collect(ctx, a.statusDeps(accts))
-	return dashboard.Snapshot{Rows: rows, Combined: combined, Accounts: accts}
+	return dashboard.Snapshot{Rows: rows, Combined: combined, Accounts: accts,
+		Today: combined.Today, TodayErr: combined.TodayErr}
 }
 
 func (a *App) dashDoctor(ctx context.Context) []doctor.Check {

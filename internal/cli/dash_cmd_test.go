@@ -3,10 +3,12 @@ package cli
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"multiclaude/internal/doctor"
 	"multiclaude/internal/run"
@@ -108,6 +110,22 @@ func TestDashDepsCollectReturnsRegistryAccounts(t *testing.T) {
 
 	if snap.Err != nil || len(snap.Rows) != 2 || len(snap.Accounts) != 2 || snap.Rows[1].Account != "work" {
 		t.Fatalf("snap=%+v", snap)
+	}
+}
+
+func TestDashCollectFeedsCombinedToday(t *testing.T) {
+	e := newCLI(t, "")
+	file := filepath.Join(e.p.ClaudeDir, "projects", "p", "s.jsonl")
+	mustWrite(t, file, `{"type":"assistant","timestamp":"`+testNow.Format(time.RFC3339)+
+		`","message":{"id":"m1","usage":{"input_tokens":7,"output_tokens":9}}}`+"\n")
+	if err := os.Chtimes(file, testNow, testNow); err != nil {
+		t.Fatal(err)
+	}
+
+	snap := e.app.dashCollect(context.Background())
+
+	if snap.Today != snap.Combined.Today || snap.Today.Input != 7 || snap.Today.Output != 9 {
+		t.Fatalf("today=%+v combined=%+v err=%q", snap.Today, snap.Combined.Today, snap.TodayErr)
 	}
 }
 

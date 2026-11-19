@@ -73,7 +73,10 @@ func TestRepeatedJobKeyIsIgnoredWhileRunning(t *testing.T) {
 }
 
 func TestTodayFitsAt80Columns(t *testing.T) {
-	m, _ := newLoaded(t)
+	m, r := newLoaded(t)
+	snap := r.snap
+	snap.Today = tokens.Tokens{Input: 1200, Output: 3400, CacheRead: 2_000_000}
+	m = update(t, m, snapshotMsg{snap: snap, at: testNow})
 	m = update(t, m, tea.WindowSizeMsg{Width: 80, Height: 24})
 
 	v := m.View()
@@ -84,14 +87,32 @@ func TestTodayFitsAt80Columns(t *testing.T) {
 	assertFits(t, v, 80, 24)
 }
 
-func TestEmptyRowTodayRendersDash(t *testing.T) {
+func TestNoPerAccountTodayColumns(t *testing.T) {
 	m, _ := newLoaded(t)
+	m = update(t, m, tea.WindowSizeMsg{Width: 200, Height: 40})
 
-	got, _ := todayCell(status.Row{}, m)
-	cache, _ := cacheCell(status.Row{}, m)
+	head := m.tableLines()[0]
 
-	if got != "-" || cache != "-" {
-		t.Fatalf("today=%q cache=%q", got, cache)
+	if strings.Contains(head, "TODAY") || strings.Contains(head, "CACHE") {
+		t.Fatalf("per-account today columns must be gone: %q", head)
+	}
+}
+
+func TestDetailsShowCombinedToday(t *testing.T) {
+	m, r := newLoaded(t)
+	snap := r.snap
+	snap.Today = tokens.Tokens{Input: 5000, Output: 6000, CacheRead: 70_000, CacheWrite: 1000}
+	m = update(t, m, snapshotMsg{snap: snap, at: testNow})
+
+	d := strings.Join(m.detailLines(), "\n")
+
+	if !strings.Contains(d, "today (all accounts) in 5.0k") || !strings.Contains(d, "cache read 70.0k") {
+		t.Fatalf("details=%q", d)
+	}
+	snap.TodayErr = "boom"
+	m = update(t, m, snapshotMsg{snap: snap, at: testNow})
+	if d := strings.Join(m.detailLines(), "\n"); !strings.Contains(d, "error: boom") {
+		t.Fatalf("details=%q", d)
 	}
 }
 
