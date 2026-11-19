@@ -159,3 +159,9 @@ TDD with `go test`, target 80%+: pure units (service-name hash, usage parsing/ag
 ## Left to the builder
 
 Module split, table rendering, `--watch` refresh mechanics, exact zsh wrapper text, name of the `login` re-auth subcommand.
+
+## Phase 2 backlog (user decisions 2026-11-19, build after live install test)
+
+1. **Default launch args.** `~/.claude-accounts/config.json`: `{"defaultArgs": [...], "accounts": {"<name>": {"args": [...]}}}`. Order: defaults → account extras → typed args. Applied to `ccm <name>`, `run`, `best` and dashboard launches only, never to internal `auth` calls or plain `claude`. `ccm config set default-args …`. `ccm t3-sync` also writes the merged args into each T3 instance's `launchArgs` (user: "also sync to t3"). User's default: `--dangerously-skip-permissions`. The dashboard shows a ⚠ badge when it's set.
+2. **Claude Code status line.** Shows the active account and its 5h/7d used % inside every session, from `ccm status --json` (cached, so it stays fast).
+3. **`ccm dash`.** Full-screen live dashboard (Bubble Tea, an allowed new dependency): account list with 5h/7d bars, the combined row, details pane, keyboard shortcuts (⏎ launch, b best, l login, a add, d doctor, s sync, t t3-sync, n new Terminal.app window, q quit). Launch mode **B**: hands the terminal to claude and returns to the dashboard when claude exits. The user's terminal is macOS Terminal.app, so `n` uses `osascript` `tell application "Terminal" to do script "ccm <name>"`. The user will use ccm as the single entry point for Claude.
