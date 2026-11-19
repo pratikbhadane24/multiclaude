@@ -134,6 +134,26 @@ func splitPOSIX(s string) []string {
 	return out
 }
 
+func TestSaveFailsWhenRootIsAFile(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "f")
+	if err := os.WriteFile(root, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := Save(paths.Paths{AccountsRoot: root}, Config{}); err == nil {
+		t.Fatal("want error")
+	}
+}
+
+func TestLoadFailsWhenConfigIsADirectory(t *testing.T) {
+	p := testPaths(t)
+	if err := os.MkdirAll(filepath.Join(p.AccountsRoot, "config.json"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(p); err == nil {
+		t.Fatal("want error")
+	}
+}
+
 func TestShellJoinRoundTrip(t *testing.T) {
 	args := []string{"--append-system-prompt", "it's a \"test\" $HOME", "", "--x=a b", "ünï"}
 	if got := splitPOSIX(ShellJoin(args)); !reflect.DeepEqual(got, args) {

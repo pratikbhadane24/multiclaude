@@ -172,18 +172,43 @@ func matchAccount(inst object, accts []registry.Account) (registry.Account, bool
 // Existing matching instances are updated in place; unrelated keys keep their
 // raw bytes. When nothing changes the input is returned unchanged.
 func Merge(settings []byte, accts []registry.Account, shimPath string) (out []byte, added, updated []string, err error) {
+	out, added, updated, _, err = MergeLaunch(settings, accts, shimPath, LaunchArgs{})
+	return out, added, updated, err
+}
+
+// MergeLaunch is Merge plus launchArgs handling (see LaunchArgs).
+func MergeLaunch(settings []byte, accts []registry.Account, shimPath string, la LaunchArgs) (out []byte, added, updated []string, res LaunchResult, err error) {
+	res = LaunchResult{Written: cloneMap(la.Written)}
 	top, err := parseObject(settings)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("parse T3 settings: %w", err)
+		return nil, nil, nil, res, fmt.Errorf("parse T3 settings: %w", err)
 	}
 	insts, err := parseObject(top.vals[keyInstances])
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("parse %s: %w", keyInstances, err)
+		return nil, nil, nil, res, fmt.Errorf("parse %s: %w", keyInstances, err)
 	}
 	insts, updated, err = updateExisting(insts, accts, shimPath)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, res, err
 	}
+	insts, added, err = addMissing(insts, accts, shimPath)
+	if err != nil {
+		return nil, nil, nil, res, err
+	}
+	insts, launchChanged, res, err := applyLaunchArgs(insts, accts, la)
+	if err != nil {
+		return nil, nil, nil, res, err
+	}
+	updated = mergeIDs(updated, launchChanged, added)
+	if len(added)+len(updated) == 0 {
+		return settings, nil, nil, res, nil
+	}
+	return render(top.with(keyInstances, insts.raw())), added, updated, res, nil
+}
+
+// addMissing appends an instance for every account that has none.
+func addMissing(insts object, accts []registry.Account, shimPath string) (object, []string, error) {
+	var added []string
 	matched := matchedNames(insts, accts)
 	for _, a := range accts {
 		if matched[a.Name] {
@@ -191,15 +216,12 @@ func Merge(settings []byte, accts []registry.Account, shimPath string) (out []by
 		}
 		id := instanceID(a)
 		if insts.has(id) {
-			return nil, nil, nil, fmt.Errorf("instance id %q already exists with a different homePath", id)
+			return object{}, nil, fmt.Errorf("instance id %q already exists with a different homePath", id)
 		}
 		insts = insts.with(id, newInstance(a, shimPath))
 		added = append(added, id)
 	}
-	if len(added)+len(updated) == 0 {
-		return settings, nil, nil, nil
-	}
-	return render(top.with(keyInstances, insts.raw())), added, updated, nil
+	return insts, added, nil
 }
 
 func updateExisting(insts object, accts []registry.Account, shimPath string) (object, []string, error) {
@@ -251,27 +273,34 @@ func render(top object) []byte {
 // change is needed; otherwise it backs up the original (if any) and writes
 // atomically, preserving the file mode.
 func Sync(p paths.Paths, accts []registry.Account, now time.Time) (added, updated []string, backupPath string, err error) {
+	added, updated, backupPath, _, err = SyncLaunch(p, accts, now, LaunchArgs{})
+	return added, updated, backupPath, err
+}
+
+// SyncLaunch is Sync plus launchArgs handling; the result's Written map must
+// be persisted by the caller (even when the file was not rewritten).
+func SyncLaunch(p paths.Paths, accts []registry.Account, now time.Time, la LaunchArgs) (added, updated []string, backupPath string, res LaunchResult, err error) {
 	orig, mode, existed, err := readSettings(p.T3Settings)
 	if err != nil {
-		return nil, nil, "", err
+		return nil, nil, "", res, err
 	}
-	out, added, updated, err := Merge(orig, accts, p.ShimPath)
+	out, added, updated, res, err := MergeLaunch(orig, accts, p.ShimPath, la)
 	if err != nil {
-		return nil, nil, "", err
+		return nil, nil, "", res, err
 	}
 	if len(added)+len(updated) == 0 {
-		return nil, nil, "", nil
+		return nil, nil, "", res, nil
 	}
 	if existed {
 		backupPath = fmt.Sprintf("%s%s%d", p.T3Settings, backupSuffix, now.Unix())
 		if err := os.WriteFile(backupPath, orig, mode); err != nil {
-			return nil, nil, "", fmt.Errorf("write backup %s: %w", backupPath, err)
+			return nil, nil, "", res, fmt.Errorf("write backup %s: %w", backupPath, err)
 		}
 	}
 	if err := atomicWrite(p.T3Settings, out, mode); err != nil {
-		return nil, nil, "", err
+		return nil, nil, "", res, err
 	}
-	return added, updated, backupPath, nil
+	return added, updated, backupPath, res, nil
 }
 
 func readSettings(path string) ([]byte, os.FileMode, bool, error) {

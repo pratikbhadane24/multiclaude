@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -185,6 +186,22 @@ func TestListAndStatusFallBackToAuthStatusEmailForMain(t *testing.T) {
 	}
 	if !strings.Contains(e.out.String(), `"email": "main@x.com"`) && !strings.Contains(e.out.String(), `"email":"main@x.com"`) {
 		t.Fatalf("status=%s", e.out)
+	}
+}
+
+func TestStatusEmailFallbackFailureIsTolerated(t *testing.T) {
+	e := newCLI(t, "")
+	e.fake.Respond = func(c run.Call) (run.Result, error) {
+		if len(c.Args) >= 2 && c.Args[0] == "auth" && c.Args[1] == "status" {
+			return run.Result{}, errors.New("boom")
+		}
+		return e.respond(c)
+	}
+
+	code := e.main("status", "--json")
+
+	if code != ExitOK || !strings.Contains(e.out.String(), `"account":"main"`) {
+		t.Fatalf("code=%d out=%s", code, e.out)
 	}
 }
 

@@ -50,7 +50,11 @@ t3 up
 | `ccm shell-init zsh` | Print the zsh wrapper and PATH line for `~/.zshrc`. Only `zsh` is supported. |
 | `ccm status [--json] [--watch [d]]` | Per-account table: `ACCOUNT EMAIL PLAN 5H USED/LEFT/RESET 7D USED/LEFT/RESET TODAY TOK STATE`, plus a combined `ALL` row. Adds `7D OPUS` and `7D SONNET` (used %) columns when the API reports those windows. `STATE` shows `limited (5h)` or `limited (7d)` when a window is at 100%. `--json` adds `seven_day_opus`, `seven_day_sonnet` and `limited` per account. `--watch` refreshes (default `30s`, or a duration like `10s`). `--json` and `--watch` cannot be combined. |
 | `ccm sync` | Re-link new shared items from `~/.claude` and copy MCP servers into every account. |
-| `ccm t3-sync` | Add or update one `claude-<account>` instance per account in `~/.t3/userdata/settings.json`. Idempotent. Prints the backup path when it changes the file. Restart T3 afterwards. |
+| `ccm t3-sync` | Add or update one `claude-<account>` instance per account in `~/.t3/userdata/settings.json`. Also sets each instance's `launchArgs` from the config (default args + account args). A `launchArgs` you edited in T3 is kept, with a warning. Idempotent. Prints the backup path when it changes the file. Restart T3 afterwards. |
+| `ccm config show` | Show the default args and per-account args (stored in `~/.claude-accounts/config.json`, mode 0600). |
+| `ccm config set default-args <args...>` | Args added to every interactive launch (`ccm <name>`, `run`, `best`) and to T3 `launchArgs`, e.g. `ccm config set default-args --dangerously-skip-permissions`. Everything after the key is taken verbatim, including `--flags`. Order: default args, account args, then the args you type. |
+| `ccm config set args <account> <args...>` | Extra args for one account (the account must exist). |
+| `ccm config clear default-args` / `ccm config clear args <account>` | Remove them. Run `ccm t3-sync` afterwards to update T3. |
 | `ccm doctor [--fix]` | Check binaries, shim, links, MCP drift, Keychain entries, T3 config. `--fix` re-links and re-syncs; a replaced file whose content differs is renamed to `<file>.ccm-backup-<unix>` first (identical copies are dropped). Exit 0 only if nothing fails or warns. |
 | `ccm remove <name> [--purge]` | Unregister after a `[y/N]` prompt. Files are kept. `--purge` also deletes the account dir and its Keychain item, but only for a direct, non-symlink child of `~/.claude-accounts` that does not contain `~/.claude` or `$HOME`. `main` cannot be removed. T3 instances are not removed. |
 | `ccm install` | Copy the native `ccm-shim` to `~/.claude-accounts/bin/claude` and symlink `ccm` into `~/.local/bin`. |
@@ -68,7 +72,7 @@ t3 up
 
 Why not auto-open: the default browser is usually signed in to a different Claude account, so an automatic open can authorize the wrong one and attach it to the new account dir. With `copy` you paste the link into the profile or private window that is signed in to the right account. After login, ccm checks the email and exits 2 on a mismatch. If Chrome cannot be opened, ccm falls back to `copy`. Only Claude hosts are ever opened or copied.
 
-Account names are `[a-z0-9-]{1,32}` and cannot be a reserved name: `main add login list run best use status sync t3-sync doctor remove shell-init help install bin browser`.
+Account names are `[a-z0-9-]{1,32}` and cannot be a reserved name: `main add login list run best use status sync t3-sync doctor remove shell-init help install bin browser config`.
 
 ### Exit codes
 
