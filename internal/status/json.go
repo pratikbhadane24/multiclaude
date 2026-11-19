@@ -67,8 +67,8 @@ func toJSONRow(r Row) jsonRow {
 	}
 	if r.Usage != nil {
 		idle := countableRow(r)
-		jr.FiveHour = &jsonWindow{r.Usage.FiveHour.UsedPct, r.Usage.FiveHour.ResetsAt, idle && r.Usage.FiveHour.UsedPct == nil}
-		jr.SevenDay = &jsonWindow{r.Usage.SevenDay.UsedPct, r.Usage.SevenDay.ResetsAt, idle && r.Usage.SevenDay.UsedPct == nil}
+		jr.FiveHour = &jsonWindow{r.Usage.FiveHour.UsedPct, r.Usage.FiveHour.ResetsAt, idle && isIdleWindow(r.Usage.FiveHour)}
+		jr.SevenDay = &jsonWindow{r.Usage.SevenDay.UsedPct, r.Usage.SevenDay.ResetsAt, idle && isIdleWindow(r.Usage.SevenDay)}
 		jr.SevenOpus = toJSONWindow(r.Usage.SevenDayOpus)
 		jr.SevenSonnet = toJSONWindow(r.Usage.SevenDaySonnet)
 		jr.Limited = limitedWindow(r) != ""

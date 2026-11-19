@@ -40,7 +40,7 @@ func TestDashContinueLaunchMatchesCcmContinue(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	c, err := e.app.dashDeps().Launch("work", []string{"--resume", id})
+	c, _, err := e.app.dashDeps().Launch("work", []string{"--resume", id})
 
 	calls := e.callsTo(e.p.RealClaude)
 	if err != nil || len(calls) != 1 || !reflect.DeepEqual(c.Args[1:], calls[0].Args) || !reflect.DeepEqual(c.Env, calls[0].Env) {

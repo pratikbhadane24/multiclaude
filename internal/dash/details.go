@@ -9,6 +9,8 @@ import (
 	"multiclaude/internal/status"
 )
 
+const argsConfigError = "launch args: config error — run ccm config show"
+
 const mainDirText = "~/.claude (main)"
 
 // healthGroups maps doctor check names to the short labels in the details pane.
@@ -44,17 +46,17 @@ func (m Model) detailLines() []string {
 		return []string{styleDim.Render("No accounts yet. Press a to add one.")}
 	}
 	now := m.deps.Now()
-	state, st := stateLabel(r)
-	if r.Err != "" {
-		state += ": " + r.Err
+	state, st := stateText(r)
+	if full := status.StateLabel(r); full != state && r.SameAs == "" && state != idleText {
+		state = full
 	}
 	title := []string{styleHeader.Render(r.Account), r.Email, r.Plan, m.accountDir(r.Account)}
 	return []string{
 		joinNonEmpty(title),
 		"state " + st.Render(state) + sep + styleDim.Render("refreshed "+age(now, m.lastRefresh)+" ago"),
-		"5h " + windowText(fiveUsed(r), resetAt(r, true), now) + sep + "7d " + windowText(sevenUsed(r), resetAt(r, false), now),
+		"5h " + windowText(status.Window5h(r, now), resetAt(r, true), now) + sep + "7d " + windowText(status.Window7d(r, now), resetAt(r, false), now),
 		m.todayDetail(),
-		"launch args " + argsText(m.deps.ArgsFor(r.Account)),
+		m.argsLine(r.Account),
 		"health " + m.healthText(r.Account),
 	}
 }
@@ -79,8 +81,21 @@ func resetAt(r status.Row, five bool) *time.Time {
 	return r.Usage.SevenDay.ResetsAt
 }
 
-func windowText(p *float64, reset *time.Time, now time.Time) string {
-	return usageStyle(p).Render(status.FormatPct(p)+" used") + ", resets " + resetIn(reset, now)
+func windowText(v status.WindowView, reset *time.Time, now time.Time) string {
+	if v.Idle {
+		return styleDim.Render("idle (no window running)")
+	}
+	return windowStyle(v).Render(v.Used+" used") + ", resets " + resetIn(reset, now)
+}
+
+// argsLine is the details line for the launch args; a config that cannot be
+// read says so instead of showing nothing.
+func (m Model) argsLine(name string) string {
+	args, err := m.deps.ArgsFor(name)
+	if err != nil {
+		return styleBad.Render(argsConfigError)
+	}
+	return "launch args " + argsText(args)
 }
 
 // todayDetail is today's combined token use: history is shared by every

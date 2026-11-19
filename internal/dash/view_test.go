@@ -76,7 +76,7 @@ func TestStateLabels(t *testing.T) {
 
 	v := m.View()
 
-	if !strings.Contains(v, "limited 5h") || !strings.Contains(v, "logged out") {
+	if !strings.Contains(v, "limited (5h)") || !strings.Contains(v, "logged out") {
 		t.Fatalf("view:\n%s", v)
 	}
 }

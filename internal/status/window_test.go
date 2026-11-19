@@ -256,3 +256,23 @@ func TestCacheWritesAliasEntriesAndIdleState(t *testing.T) {
 		t.Fatalf("%+v", cache.Accounts)
 	}
 }
+
+func TestWindowViewZeroUsedNoResetIsIdle(t *testing.T) {
+	r := Row{AccountUsage: ok("max", f(0), f(0), nil)}
+
+	v5, v7 := Window5h(r, now), Window7d(r, now)
+
+	if !v5.Idle || v5.Reset != "idle" || v5.Used != "0%" || !v7.Idle {
+		t.Fatalf("%+v %+v", v5, v7)
+	}
+}
+
+func TestWindowViewZeroUsedWithResetIsNotIdle(t *testing.T) {
+	reset := now.Add(time.Hour)
+	r := Row{AccountUsage: usage.AccountUsage{Account: "x", State: usage.StateOK, Usage: &usage.Usage{
+		FiveHour: usage.Window{UsedPct: f(0), ResetsAt: &reset}}}}
+
+	if v := Window5h(r, now); v.Idle || v.Reset != "1h0m" {
+		t.Fatalf("%+v", v)
+	}
+}

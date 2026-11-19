@@ -36,10 +36,12 @@ type Snapshot struct {
 // Deps are the dashboard's injected collaborators.
 type Deps struct {
 	// Collect gathers usage for every registered account.
-	Collect func(ctx context.Context) Snapshot
+	// showDuplicates keeps accounts that share a login as separate rows.
+	Collect func(ctx context.Context, showDuplicates bool) Snapshot
 	// Launch builds the command `ccm <name> [extra...]` would run (claude as
 	// that account, config args first).
-	Launch func(name string, extra []string) (*exec.Cmd, error)
+	// warning is a non-fatal config problem (the launch still happens).
+	Launch func(name string, extra []string) (cmd *exec.Cmd, warning string, err error)
 	// LatestSession returns the newest conversation id for the current folder
 	// (shared history), as `ccm continue` finds it.
 	LatestSession func() (string, error)
@@ -55,13 +57,17 @@ type Deps struct {
 	Sync   func(ctx context.Context) (string, error)
 	T3Sync func(ctx context.Context) (string, error)
 	// ArgsFor returns the merged launch args for an account.
-	ArgsFor func(name string) []string
+	// An error means the config could not be read.
+	ArgsFor func(name string) ([]string, error)
 	Now     func() time.Time
 	// Exec hands the terminal to a child (tea.ExecProcess in production).
 	Exec func(c *exec.Cmd, fn tea.ExecCallback) tea.Cmd
 	// Tick schedules a timer message (tea.Tick in production).
 	Tick     func(d time.Duration, fn func(time.Time) tea.Msg) tea.Cmd
 	Interval time.Duration
+	// ShowDuplicates lists accounts that share a login as their own rows
+	// (toggled with A).
+	ShowDuplicates bool
 }
 
 // withDefaults returns a copy of d with production defaults for unset hooks.
@@ -76,7 +82,7 @@ func withDefaults(d Deps) Deps {
 		d.Now = time.Now
 	}
 	if d.ArgsFor == nil {
-		d.ArgsFor = func(string) []string { return nil }
+		d.ArgsFor = func(string) ([]string, error) { return nil, nil }
 	}
 	if d.Interval <= 0 {
 		d.Interval = DefaultInterval
@@ -97,7 +103,9 @@ type (
 		snap Snapshot
 		// started is when the collection began (it may predate a claude exit).
 		started time.Time
-		at      time.Time
+		// showDuplicates is the setting the collection ran with.
+		showDuplicates bool
+		at             time.Time
 	}
 	tickMsg     struct{}
 	execDoneMsg struct {

@@ -22,6 +22,7 @@ var keyHelp = []struct{ key, label, help string }{
 	{"d", "doctor", "check the setup and show problems"},
 	{"s", "sync", "link shared config and sync MCP servers"},
 	{"t", "t3-sync", "add every account to T3 Code"},
+	{"A", "duplicates", "show or hide accounts signed in as the same login as another (hidden ones are merged into the first, shown as main (= admin))"},
 	{"r", "refresh", "refresh usage now (auto every 30s)"},
 	{"?", "help", "show or hide this help"},
 	{"q", "quit", "leave the dashboard (also Ctrl-C)"},
@@ -57,6 +58,8 @@ func (m Model) onListKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeHelp
 		m.pane.SetContent(strings.Join(m.helpLines(), "\n"))
 		m.pane.GotoTop()
+	case "A":
+		return m.toggleDuplicates()
 	case "r":
 		next, cmd := m.refresh()
 		return next.withToast("refreshing…"), cmd
@@ -74,6 +77,18 @@ func (m Model) onListKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.onAccountKey(k.String())
 	}
 	return m, nil
+}
+
+// toggleDuplicates flips duplicate rows and re-collects; a collection already
+// in flight is superseded (its snapshot no longer matches the setting).
+func (m Model) toggleDuplicates() (tea.Model, tea.Cmd) {
+	m.deps.ShowDuplicates = !m.deps.ShowDuplicates
+	m.loading = true
+	text := "hiding duplicate logins…"
+	if m.deps.ShowDuplicates {
+		text = "showing duplicate logins…"
+	}
+	return m.withToast(text), m.collectCmd()
 }
 
 // onAccountKey handles keys that act on the selected account.

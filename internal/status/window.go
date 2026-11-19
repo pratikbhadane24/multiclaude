@@ -30,11 +30,17 @@ func countableRow(r Row) bool {
 	return (r.State == usage.StateOK || r.State == usage.StateExpiredRefreshed) && r.Usage != nil
 }
 
+// isIdleWindow is a window with nothing running: not reported at all, or 0%
+// used with no reset time.
+func isIdleWindow(w usage.Window) bool {
+	return w.UsedPct == nil || (*w.UsedPct == 0 && w.ResetsAt == nil)
+}
+
 func buildView(r Row, w usage.Window, now time.Time) WindowView {
 	if !countableRow(r) {
 		return WindowView{Used: naText, Left: naText, Reset: naText}
 	}
-	if w.UsedPct == nil {
+	if isIdleWindow(w) {
 		return WindowView{Used: "0%", Left: "100%", Reset: idleText, Idle: true}
 	}
 	used := *w.UsedPct
