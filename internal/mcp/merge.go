@@ -5,6 +5,7 @@ package mcp
 import (
 	"bytes"
 	"encoding/json"
+	"reflect"
 	"sort"
 )
 
@@ -48,11 +49,21 @@ func sameServers(a, b map[string]json.RawMessage) bool {
 	return true
 }
 
-// sameJSON compares two JSON values ignoring insignificant whitespace.
+// sameJSON compares two JSON values semantically: whitespace and string
+// escaping (e.g. "&" vs "&") are ignored; numbers compare by their text.
 func sameJSON(a, b json.RawMessage) bool {
-	var ca, cb bytes.Buffer
-	if json.Compact(&ca, a) != nil || json.Compact(&cb, b) != nil {
+	va, errA := decodeValue(a)
+	vb, errB := decodeValue(b)
+	if errA != nil || errB != nil {
 		return bytes.Equal(a, b)
 	}
-	return bytes.Equal(ca.Bytes(), cb.Bytes())
+	return reflect.DeepEqual(va, vb)
+}
+
+func decodeValue(raw json.RawMessage) (any, error) {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var v any
+	err := dec.Decode(&v)
+	return v, err
 }

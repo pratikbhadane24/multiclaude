@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -76,6 +77,19 @@ func TestMergeIdenticalIsNotChanged(t *testing.T) {
 	}
 	if !reflect.DeepEqual(synced, []string{"a"}) {
 		t.Fatalf("synced = %v", synced)
+	}
+}
+
+func TestMergeIgnoresHTMLEscapingDifferences(t *testing.T) {
+	main := servers("a", `{"url": "?a=1&b=2", "x": "<y>"}`)
+	bs := `\`
+	acct := servers("a", `{"url":"?a=1`+bs+`u0026b=2","x":"`+bs+`u003cy`+bs+`u003e"}`)
+	if !strings.Contains(string(acct["a"]), bs+"u0026") {
+		t.Fatalf("fixture not escaped: %s", acct["a"])
+	}
+
+	if _, _, changed := Merge(main, acct, []string{"a"}); changed {
+		t.Fatal("escape-only difference reported as change")
 	}
 }
 

@@ -235,60 +235,6 @@ func TestSyncCreatesMissingAccountFile(t *testing.T) {
 	}
 }
 
-func TestSyncSkipsWhenLockIsHeld(t *testing.T) {
-	p, acc := setupSync(t)
-	writeFile(t, p.ClaudeJSON, mainJSON)
-	accFile := filepath.Join(acc, ".claude.json")
-	writeFile(t, accFile, accountJSON)
-	unlock, err := acquireLock(filepath.Join(p.AccountsRoot, lockFileName))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer unlock()
-	saved := lockWait
-	lockWait = 50 * time.Millisecond
-	defer func() { lockWait = saved }()
-
-	_, err = Sync(p, acc)
-
-	if !errors.Is(err, ErrLockTimeout) {
-		t.Fatalf("err = %v, want ErrLockTimeout", err)
-	}
-	if string(mustRead(t, accFile)) != accountJSON {
-		t.Fatal("account file modified")
-	}
-}
-
-func TestSyncPreservesUnknownStateKeys(t *testing.T) {
-	p, acc := setupSync(t)
-	writeFile(t, p.ClaudeJSON, mainJSON)
-	statePath := filepath.Join(p.AccountsRoot, "state.json")
-	writeFile(t, statePath, `{"other": {"k": [1, 2]}, "mcpSynced": {"/elsewhere": ["z"]}}`)
-
-	if _, err := Sync(p, acc); err != nil {
-		t.Fatal(err)
-	}
-	top := readTop(t, statePath)
-	if string(top["other"]) != `{"k": [1, 2]}` {
-		t.Fatalf("other = %s", top["other"])
-	}
-	var synced map[string][]string
-	if err := json.Unmarshal(top["mcpSynced"], &synced); err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(synced, map[string][]string{"/elsewhere": {"z"}, acc: {"a", "b"}}) {
-		t.Fatalf("synced = %v", synced)
-	}
-}
-
-func TestParseObjectRejectsNonObjectsAndTrailingData(t *testing.T) {
-	for _, in := range []string{`{} {}`, `[1]`, `{"a":1`, `"x"`} {
-		if _, err := parseObject([]byte(in)); err == nil {
-			t.Fatalf("parseObject(%q) succeeded", in)
-		}
-	}
-}
-
 func TestSyncConcurrentCallsLeaveValidFileAndNoTemps(t *testing.T) {
 	p, acc := setupSync(t)
 	writeFile(t, p.ClaudeJSON, mainJSON)

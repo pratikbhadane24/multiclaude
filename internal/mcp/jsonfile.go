@@ -107,9 +107,27 @@ func renderObject(members []member) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// encodeIndented marshals v with ccm's indent and WITHOUT HTML escaping, so
+// "&", "<", ">" are written as-is (escaping would make every compare differ).
+func encodeIndented(v any) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent(indent, indent)
+	if err := enc.Encode(v); err != nil {
+		return nil, err
+	}
+	return bytes.TrimRight(buf.Bytes(), "\n"), nil
+}
+
+// beforeRename is a test hook run just before the precheck and rename.
+var beforeRename func()
+
 // writeAtomic writes data to a temp file in path's dir (mode 0600) and renames
-// it over path, so readers never see a partial file.
-func writeAtomic(path string, data []byte) (err error) {
+// it over path, so readers never see a partial file. precheck (optional) runs
+// right before the rename; if it fails the temp file is removed and path is
+// left untouched.
+func writeAtomic(path string, data []byte, precheck func() error) (err error) {
 	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*"+tempSuffix)
 	if err != nil {
 		return fmt.Errorf("create temp for %s: %w", path, err)
@@ -130,6 +148,14 @@ func writeAtomic(path string, data []byte) (err error) {
 	}
 	if err != nil {
 		return fmt.Errorf("write temp for %s: %w", path, err)
+	}
+	if beforeRename != nil {
+		beforeRename()
+	}
+	if precheck != nil {
+		if err = precheck(); err != nil {
+			return err
+		}
 	}
 	if err = os.Rename(tmp.Name(), path); err != nil {
 		return fmt.Errorf("replace %s: %w", path, err)
