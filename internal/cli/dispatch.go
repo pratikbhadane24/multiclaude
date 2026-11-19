@@ -14,7 +14,10 @@ const ExitUsage = 64
 
 const usageText = `Usage: ccm <command> [args]
 
+Run ccm with no arguments in a terminal to open the dashboard.
+
 Commands:
+  dash                          live dashboard: every action on a key
   add <name> [--email e] [--open mode]   create an account and log it in
   login <name> [--open mode] | --all    log in one account, or every logged-out one
   list                          list accounts and their login state
@@ -54,11 +57,15 @@ var commands = map[string]handler{
 	"remove":     (*App).cmdRemove,
 	"shell-init": (*App).cmdShellInit,
 	"install":    (*App).cmdInstall,
+	"dash":       (*App).cmdDash,
 }
 
 // Main dispatches args (without the program name) and returns the exit code.
 func (a *App) Main(ctx context.Context, args []string) int {
 	if len(args) == 0 {
+		if a.hasTTY() {
+			return a.cmdDash(ctx, nil)
+		}
 		fmt.Fprint(a.Err, usageText)
 		return ExitUsage
 	}
