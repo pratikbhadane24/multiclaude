@@ -61,6 +61,7 @@ func (a *App) dashDeps() dashboard.Deps {
 		Launch:  a.LaunchCmd,
 
 		LatestSession: a.dashLatestSession,
+		NewSessionID:  newSessionID,
 		Self:          a.selfCmd,
 		SelfPath:      a.selfPath(),
 		Run:           a.runQuiet,

@@ -57,8 +57,11 @@ type Model struct {
 	prompt confirm
 	// handoffFrom is the account claude just exited on; the first snapshot
 	// collected after handoffAfter decides whether to offer a handoff.
-	handoffFrom  string
-	handoffAfter time.Time
+	handoffFrom string
+	// handoffSession is the session id that launch started ("" = look up the
+	// latest idle one).
+	handoffSession string
+	handoffAfter   time.Time
 	// handoffReady is set once a fresh snapshot landed: the offer is then
 	// shown as soon as the list is visible, until handoffUntil.
 	handoffReady bool
@@ -186,7 +189,7 @@ func (m Model) onExecDone(msg execDoneMsg) (tea.Model, tea.Cmd) {
 		m = m.withToast(msg.label + " finished")
 	}
 	if msg.account != "" {
-		m.handoffFrom, m.handoffAfter = msg.account, m.deps.Now()
+		m.handoffFrom, m.handoffAfter, m.handoffSession = msg.account, m.deps.Now(), msg.session
 	}
 	return m.refresh()
 }

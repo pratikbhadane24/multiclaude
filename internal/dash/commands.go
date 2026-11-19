@@ -50,13 +50,15 @@ func (m Model) execCmd(c *exec.Cmd, label string) tea.Cmd {
 
 // launch hands the terminal to claude as name with extra args; its exit is
 // reported with the account so a handoff can be offered.
-func (m Model) launch(name string, extra []string) (Model, tea.Cmd) {
+func (m Model) launch(name string, extra []string, session string) (Model, tea.Cmd) {
 	c, warning, err := m.deps.Launch(name, extra)
 	if err != nil {
 		return m.withToast(fmt.Sprintf("launch %s: %v", name, err)), nil
 	}
 	label := "claude (" + name + ")"
-	cmd := m.deps.Exec(c, func(err error) tea.Msg { return execDoneMsg{label: label, account: name, err: err} })
+	cmd := m.deps.Exec(c, func(err error) tea.Msg {
+		return execDoneMsg{label: label, account: name, session: session, err: err}
+	})
 	toast := "launched claude as " + name
 	if warning != "" {
 		toast = "ignoring config: " + warning + " (default args not applied)"
@@ -69,7 +71,32 @@ func (m Model) launchBest() (Model, tea.Cmd) {
 	if name == "" {
 		return m.withToast("no usable account right now"), nil
 	}
-	return m.launch(name, nil)
+	return m.launchNew(name)
+}
+
+// userPicksSession reports whether launch args already choose a conversation.
+func userPicksSession(args []string) bool {
+	for _, a := range args {
+		switch strings.SplitN(a, "=", 2)[0] {
+		case "--resume", "-r", "--continue", "-c", "--session-id":
+			return true
+		}
+	}
+	return false
+}
+
+// launchNew starts a new conversation as name, with an explicit session id so
+// a later handoff resumes exactly that chat (unless the configured args
+// already choose one).
+func (m Model) launchNew(name string) (Model, tea.Cmd) {
+	if m.deps.NewSessionID == nil {
+		return m.launch(name, nil, "")
+	}
+	if args, _ := m.deps.ArgsFor(name); userPicksSession(args) {
+		return m.launch(name, nil, "")
+	}
+	id := m.deps.NewSessionID()
+	return m.launch(name, []string{sessionIDFlag, id}, id)
 }
 
 func (m Model) newWindow(name string) tea.Cmd {
