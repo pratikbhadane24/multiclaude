@@ -3,10 +3,10 @@ package consts
 import "testing"
 
 func TestReservedNames(t *testing.T) {
-	if len(ReservedNames) != 18 {
+	if len(ReservedNames) != 19 {
 		t.Fatalf("got %d", len(ReservedNames))
 	}
-	for _, n := range []string{"install", "bin", "browser", "config"} {
+	for _, n := range []string{"install", "bin", "browser", "config", "dash"} {
 		if _, ok := ReservedNames[n]; !ok {
 			t.Fatalf("missing %s", n)
 		}
