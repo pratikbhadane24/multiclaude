@@ -2,3 +2,4 @@ coverage.out
 .superpowers
 /bin/
 /dist/
+.claude/worktrees/
