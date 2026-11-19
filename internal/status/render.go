@@ -32,6 +32,13 @@ func stateText(r Row) string {
 	return "api error"
 }
 
+func todayText(r Row) string {
+	if r.TodayErr != "" {
+		return "err"
+	}
+	return humanize(todayTotal(r.Today))
+}
+
 func rowLine(r Row, now time.Time) string {
 	var five, seven usage.Window
 	if r.Usage != nil {
@@ -41,7 +48,7 @@ func rowLine(r Row, now time.Time) string {
 		r.Account, r.Email, r.Plan,
 		fmtPct(five.UsedPct), fmtLeft(five.UsedPct), fmtReset(five.ResetsAt, now),
 		fmtPct(seven.UsedPct), fmtLeft(seven.UsedPct), fmtReset(seven.ResetsAt, now),
-		humanize(todayTotal(r.Today)), stateText(r),
+		todayText(r), stateText(r),
 	}
 	for i, c := range cols {
 		if c == "" {
@@ -83,6 +90,12 @@ func Render(rows []Row, c usage.Combined, now time.Time) string {
 	_ = tw.Flush()
 	b.WriteString(allLine(c, now) + "\n")
 	for _, r := range rows {
+		if r.TodayErr != "" {
+			fmt.Fprintf(&b, "⚠ %s: token scan failed\n", r.Account)
+		}
+		if r.LinkErr != "" {
+			fmt.Fprintf(&b, "⚠ %s: link check failed — run ccm doctor\n", r.Account)
+		}
 		for _, item := range r.LinkWarnings {
 			fmt.Fprintf(&b, "⚠ %s: %s is no longer shared — run ccm doctor\n", r.Account, item)
 		}

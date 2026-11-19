@@ -2,6 +2,7 @@ package status
 
 import (
 	"fmt"
+	"math"
 	"time"
 )
 
@@ -49,15 +50,20 @@ func fmtReset(t *time.Time, now time.Time) string {
 	return fmtDuration(t.Sub(now))
 }
 
+// humanize renders 999, 34.5k, 1.2M, 1.0B, promoting a unit when rounding
+// would otherwise print 1000.0 of the smaller one.
 func humanize(n int64) string {
+	units := []struct {
+		div    float64
+		suffix string
+	}{{kilo, "k"}, {mega, "M"}, {giga, "B"}}
 	v := float64(n)
-	switch {
-	case v >= giga:
-		return fmt.Sprintf("%.1fB", v/giga)
-	case v >= mega:
-		return fmt.Sprintf("%.1fM", v/mega)
-	case v >= kilo:
-		return fmt.Sprintf("%.1fk", v/kilo)
+	if v < kilo {
+		return fmt.Sprintf("%d", n)
 	}
-	return fmt.Sprintf("%d", n)
+	idx := 0
+	for idx < len(units)-1 && math.Round(v/units[idx].div*10)/10 >= kilo {
+		idx++
+	}
+	return fmt.Sprintf("%.1f%s", v/units[idx].div, units[idx].suffix)
 }

@@ -28,6 +28,7 @@ type jsonRow struct {
 	CacheWrite   int64       `json:"today_cache_write"`
 	TodayError   string      `json:"today_error,omitempty"`
 	LinkWarnings []string    `json:"link_warnings"`
+	LinkErr      string      `json:"link_error,omitempty"`
 }
 
 type jsonCombined struct {
@@ -43,7 +44,7 @@ func toJSONRow(r Row) jsonRow {
 	jr := jsonRow{
 		Account: r.Account, Email: r.Email, Plan: r.Plan, State: string(r.State), Error: r.Err,
 		TodayTokens: todayTotal(r.Today), Input: r.Today.Input, Output: r.Today.Output,
-		CacheRead: r.Today.CacheRead, CacheWrite: r.Today.CacheWrite, TodayError: r.TodayErr,
+		CacheRead: r.Today.CacheRead, CacheWrite: r.Today.CacheWrite, TodayError: r.TodayErr, LinkErr: r.LinkErr,
 		LinkWarnings: append([]string{}, r.LinkWarnings...),
 	}
 	if r.Usage != nil {

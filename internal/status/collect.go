@@ -31,6 +31,7 @@ type Row struct {
 	usage.AccountUsage
 	Today        tokens.Tokens
 	TodayErr     string
+	LinkErr      string
 	LinkWarnings []string
 }
 
@@ -59,9 +60,11 @@ func collectOne(ctx context.Context, d Deps, a registry.Account) Row {
 		}
 	}
 	if d.Inspect != nil {
-		if items, err := d.Inspect(d.Paths, dir); err == nil {
-			row.LinkWarnings = replacedItems(items)
+		items, err := d.Inspect(d.Paths, dir)
+		if err != nil {
+			row.LinkErr = err.Error()
 		}
+		row.LinkWarnings = replacedItems(items)
 	}
 	return row
 }

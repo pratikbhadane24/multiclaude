@@ -3,6 +3,7 @@ package status
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"sync"
 	"testing"
@@ -28,12 +29,21 @@ func TestCollectConcurrentOrderedAndWarnings(t *testing.T) {
 	accts := []registry.Account{{Name: "main"}, {Name: "a", Dir: "/d/a"}, {Name: "b", Dir: "/d/b"}}
 	var mu sync.Mutex
 	var dirs []string
+	var arrive sync.WaitGroup
+	arrive.Add(len(accts))
+	release := make(chan struct{})
+	go func() { arrive.Wait(); close(release) }()
 	d := Deps{
 		Accounts: accts,
 		Paths:    paths.Paths{ClaudeDir: "/home/.claude"},
 		Now:      func() time.Time { return now },
 		Fetch: func(_ context.Context, a registry.Account) usage.AccountUsage {
-			time.Sleep(100 * time.Millisecond)
+			arrive.Done()
+			select {
+			case <-release:
+			case <-time.After(5 * time.Second):
+				t.Error("fetches are not concurrent")
+			}
 			return ok(a.Name, f(10), f(10), nil)
 		},
 		Today: func(dir string, _ time.Time) (tokens.Tokens, error) {
@@ -49,14 +59,13 @@ func TestCollectConcurrentOrderedAndWarnings(t *testing.T) {
 			if dir == "/d/a" {
 				return []links.Item{{Name: "rules", State: links.StateReplaced}, {Name: "hooks", State: links.StateMissing}}, nil
 			}
+			if dir == "/d/b" {
+				return nil, errors.New("boom")
+			}
 			return nil, nil
 		},
 	}
-	start := time.Now()
 	rows, c := Collect(context.Background(), d)
-	if el := time.Since(start); el > 250*time.Millisecond {
-		t.Fatalf("not concurrent: %v", el)
-	}
 	if len(rows) != 3 || rows[0].Account != "main" || rows[1].Account != "a" || rows[2].Account != "b" {
 		t.Fatalf("order %+v", rows)
 	}
@@ -65,6 +74,9 @@ func TestCollectConcurrentOrderedAndWarnings(t *testing.T) {
 	}
 	if len(rows[1].LinkWarnings) != 1 || rows[1].LinkWarnings[0] != "rules" {
 		t.Fatalf("warnings %+v", rows[1].LinkWarnings)
+	}
+	if rows[2].LinkErr != "boom" || rows[1].LinkErr != "" {
+		t.Fatalf("link err %+v", rows)
 	}
 	if rows[2].TodayErr == "" || rows[0].Today.Input != 1 {
 		t.Fatalf("today %+v", rows)
@@ -168,5 +180,80 @@ func TestWatcherRetriesErrorsAfterTenMinutes(t *testing.T) {
 	step()
 	if calls["bad"] != 2 {
 		t.Fatalf("retry after 10m: %v", calls)
+	}
+}
+
+func TestRenderErrors(t *testing.T) {
+	rows := []Row{{AccountUsage: ok("a", f(1), f(1), nil), TodayErr: "x", LinkErr: "y"}}
+	out := Render(rows, usage.Aggregate([]usage.AccountUsage{rows[0].AccountUsage}), now)
+	for _, want := range []string{"err", "⚠ a: token scan failed", "⚠ a: link check failed — run ccm doctor"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+	b, _ := RenderJSON(rows, usage.Combined{})
+	if !strings.Contains(string(b), `"link_error":"y"`) {
+		t.Fatalf("%s", b)
+	}
+}
+
+func TestHumanize(t *testing.T) {
+	cases := map[int64]string{999: "999", 1000: "1.0k", 34_500: "34.5k", 999_949: "999.9k", 999_950: "1.0M", 1_200_000: "1.2M", 999_950_000: "1.0B"}
+	for n, want := range cases {
+		if got := humanize(n); got != want {
+			t.Errorf("%d: %q != %q", n, got, want)
+		}
+	}
+}
+
+func TestCollectNilTodayInspect(t *testing.T) {
+	d := Deps{
+		Accounts: []registry.Account{{Name: "a", Dir: "/d/a", Email: "e@x"}},
+		Now:      func() time.Time { return now },
+		Fetch: func(context.Context, registry.Account) usage.AccountUsage {
+			return usage.AccountUsage{State: usage.StateAPIError}
+		},
+	}
+	rows, _ := Collect(context.Background(), d)
+	if len(rows) != 1 || rows[0].Account != "a" || rows[0].Email != "e@x" || rows[0].LinkWarnings != nil || rows[0].TodayErr != "" {
+		t.Fatalf("%+v", rows)
+	}
+}
+
+func TestPickBestExpiredRefreshedAndTie(t *testing.T) {
+	r := ok("r", f(50), f(50), nil)
+	r.State = usage.StateExpiredRefreshed
+	got, found := PickBest([]usage.AccountUsage{ok("a", f(60), f(10), nil), r})
+	if !found || got.Account != "r" {
+		t.Fatalf("expired-refreshed %v %v", got, found)
+	}
+	got, _ = PickBest([]usage.AccountUsage{ok("first", f(50), f(50), nil), ok("second", f(50), f(50), nil)})
+	if got.Account != "first" {
+		t.Fatalf("tie %v", got.Account)
+	}
+}
+
+func TestWatcherLoggedOutBackoff(t *testing.T) {
+	clock := now
+	calls := 0
+	d := Deps{
+		Accounts: []registry.Account{{Name: "x"}},
+		Now:      func() time.Time { return clock },
+		Fetch: func(context.Context, registry.Account) usage.AccountUsage {
+			calls++
+			return usage.AccountUsage{Account: "x", State: usage.StateLoggedOut}
+		},
+	}
+	w := NewWatcher(d.Now)
+	w.Step(context.Background(), d)
+	clock = clock.Add(9 * time.Minute)
+	w.Step(context.Background(), d)
+	if calls != 1 {
+		t.Fatalf("calls %d", calls)
+	}
+	clock = clock.Add(time.Minute)
+	rows, _ := w.Step(context.Background(), d)
+	if calls != 2 || rows[0].State != usage.StateLoggedOut {
+		t.Fatalf("calls %d %+v", calls, rows)
 	}
 }
