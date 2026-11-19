@@ -54,9 +54,9 @@ func parseSpans(data []byte) (spans []span, closeIdx int, err error) {
 			return nil, 0, terr
 		}
 		valEnd := int(dec.InputOffset())
-		quoted, _ := json.Marshal(key)
+		quoted := jsonString(key)
 		keyStart := keyEnd - len(quoted)
-		if keyStart < 0 || !bytes.Equal(data[keyStart:keyEnd], quoted) {
+		if keyStart < 0 || string(data[keyStart:keyEnd]) != quoted {
 			keyStart = -1
 		}
 		spans = append(spans, span{key, keyStart, valEnd - len(raw), valEnd})
@@ -122,19 +122,28 @@ func addStatusLine(data []byte, spans []span, closeIdx int, val string) []byte {
 	return splice(data, last.valEnd, last.valEnd, memberSeparator(data, last)[:]+member)
 }
 
-// removeSpan deletes span i together with its separating comma.
+// removeSpan deletes span i together with its separating comma. It never
+// depends on other keys' offsets, so unusual key encodings cannot panic it.
 func removeSpan(data []byte, spans []span, closeIdx, i int) ([]byte, error) {
 	s := spans[i]
 	switch {
 	case i > 0:
 		return splice(data, spans[i-1].valEnd, s.valEnd, ""), nil
-	case len(spans) > 1 && s.keyStart >= 0:
-		return splice(data, s.keyStart, spans[1].keyStart, ""), nil
 	case len(spans) == 1:
 		open := bytes.IndexByte(data, '{')
 		return splice(data, open+1, closeIdx, ""), nil
+	case s.keyStart < 0:
+		return nil, errors.New("cannot remove statusLine: unsupported key formatting")
 	}
-	return nil, errors.New("cannot remove statusLine: unsupported key formatting")
+	comma := bytes.IndexByte(data[s.valEnd:], ',')
+	if comma < 0 {
+		return nil, errors.New("cannot remove statusLine: malformed settings.json")
+	}
+	next := s.valEnd + comma + 1
+	for next < len(data) && bytes.IndexByte([]byte(" \t\r\n"), data[next]) >= 0 {
+		next++
+	}
+	return splice(data, s.keyStart, next, ""), nil
 }
 
 type statusLineInfo struct {

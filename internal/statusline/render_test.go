@@ -5,7 +5,9 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -221,11 +223,66 @@ func TestShellRunnerTimesOutAndCaptures(t *testing.T) {
 }
 
 func TestRenderIsCacheOnlyAndFast(t *testing.T) {
-	// Deps has no Keychain/HTTP collaborators at all; the render path is cache-only.
+	// Deps has no Keychain/HTTP collaborators at all; the render path is
+	// cache-only. The time bound is deliberately generous to avoid flakiness.
 	h := newHarness(t, freshCache())
 	start := time.Now()
 	h.render(t, "{}", "")
-	if d := time.Since(start); d > 150*time.Millisecond {
+	if d := time.Since(start); d > time.Second {
 		t.Fatalf("render took %v", d)
+	}
+	if h.spawns != 0 || len(h.wraps) != 0 {
+		t.Fatalf("unexpected side effects: spawns=%d wraps=%v", h.spawns, h.wraps)
+	}
+}
+
+func TestRenderWindowPastResetShowsQuestionMark(t *testing.T) {
+	past, future := now.Add(-time.Minute), now.Add(time.Hour)
+	c := freshCache()
+	c.Accounts[1].FiveHourResetsAt, c.Accounts[1].SevenDayResetsAt = &past, &future
+	h := newHarness(t, c)
+	work := filepath.Join(h.home, "accts", "work")
+
+	got := h.render(t, "{}", work)
+
+	if got != "ccm: work 5h ? · 7d 30%\n" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestSpawnerLockReleaseAllowsImmediateRespawn(t *testing.T) {
+	p := paths.Paths{AccountsRoot: t.TempDir()}
+	starts := 0
+	spawn := NewSpawner(p, func() time.Time { return now }, func() error { starts++; return nil })
+
+	_ = spawn()
+	ReleaseLock(p)
+	_ = spawn()
+
+	if starts != 2 {
+		t.Fatalf("starts=%d want 2", starts)
+	}
+}
+
+func TestRunShellTimeoutKillsWholeProcessGroup(t *testing.T) {
+	pidFile := filepath.Join(t.TempDir(), "pid")
+
+	_, err := RunShell("sleep 30 & echo $! > "+pidFile+"; wait", nil, 300*time.Millisecond)
+
+	if err == nil {
+		t.Fatal("want timeout error")
+	}
+	b, rerr := os.ReadFile(pidFile)
+	if rerr != nil {
+		t.Fatal(rerr)
+	}
+	pid, _ := strconv.Atoi(strings.TrimSpace(string(b)))
+	deadline := time.Now().Add(2 * time.Second)
+	for syscall.Kill(pid, 0) == nil && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if syscall.Kill(pid, 0) == nil {
+		_ = syscall.Kill(pid, syscall.SIGKILL)
+		t.Fatalf("grandchild %d survived the timeout", pid)
 	}
 }

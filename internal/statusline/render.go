@@ -69,9 +69,14 @@ func Account(p paths.Paths, configDir string) string {
 	return filepath.Base(dir)
 }
 
-func segment(label string, used *float64) string {
+// segment renders one window; a window that already reset since the cache was
+// written is unknown ("?"), not the stale percentage.
+func segment(label string, used *float64, resets *time.Time, now time.Time) string {
 	if used == nil {
 		return ""
+	}
+	if resets != nil && resets.Before(now) {
+		return label + " ?"
 	}
 	s := fmt.Sprintf("%s %.0f%%", label, *used)
 	if *used >= fullPct {
@@ -80,7 +85,7 @@ func segment(label string, used *float64) string {
 	return s
 }
 
-func ccmPart(name string, c *status.CacheAccount) string {
+func ccmPart(name string, c *status.CacheAccount, now time.Time) string {
 	out := "ccm: " + name
 	if c == nil {
 		return out
@@ -89,7 +94,7 @@ func ccmPart(name string, c *status.CacheAccount) string {
 		return out + " (logged out)"
 	}
 	var segs []string
-	for _, s := range []string{segment("5h", c.FiveHourUsed), segment("7d", c.SevenDayUsed)} {
+	for _, s := range []string{segment("5h", c.FiveHourUsed, c.FiveHourResetsAt, now), segment("7d", c.SevenDayUsed, c.SevenDayResetsAt, now)} {
 		if s != "" {
 			segs = append(segs, s)
 		}
@@ -139,7 +144,7 @@ func Render(in io.Reader, env func(string) string, d Deps, out io.Writer) int {
 	if (err != nil || d.Now().Sub(cache.WrittenAt) > staleAfter) && d.SpawnRefresh != nil {
 		_ = d.SpawnRefresh()
 	}
-	line := ccmPart(name, acct)
+	line := ccmPart(name, acct, d.Now())
 	if prefix != "" {
 		line = prefix + separator + line
 	}
@@ -153,6 +158,9 @@ func RunShell(cmd string, stdin []byte, timeout time.Duration) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	c := exec.CommandContext(ctx, "/bin/sh", "-c", cmd)
+	// Own process group so a timeout kills the shell and everything it spawned.
+	c.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	c.Cancel = func() error { return syscall.Kill(-c.Process.Pid, syscall.SIGKILL) }
 	c.Stdin = bytes.NewReader(stdin)
 	var buf bytes.Buffer
 	c.Stdout = &buf
@@ -168,22 +176,41 @@ func DefaultRunWrap(cmd string, stdin []byte) (string, error) {
 	return RunShell(cmd, stdin, wrapTimeout)
 }
 
-// NewSpawner guards start with <AccountsRoot>/cache/refresh.lock: a lock whose
-// mtime is under 60s old means a refresh is already running.
-func NewSpawner(p paths.Paths, now func() time.Time, start func() error) func() error {
-	lock := filepath.Join(p.AccountsRoot, "cache", lockFileName)
-	return func() error {
-		if st, err := os.Stat(lock); err == nil && now().Sub(st.ModTime()) < lockFreshFor {
-			return nil
+func lockPath(p paths.Paths) string { return filepath.Join(p.AccountsRoot, "cache", lockFileName) }
+
+// ReleaseLock removes the refresh lock (called by a finished refresher).
+func ReleaseLock(p paths.Paths) { _ = os.Remove(lockPath(p)) }
+
+// takeLock creates the lock exclusively; a lock older than lockFreshFor is
+// stale and is removed and retaken once. It reports whether the lock is ours.
+func takeLock(lock string, now time.Time) bool {
+	for attempt := 0; attempt < 2; attempt++ {
+		f, err := os.OpenFile(lock, os.O_CREATE|os.O_EXCL|os.O_WRONLY, lockFileMode)
+		if err == nil {
+			_ = f.Close()
+			_ = os.Chtimes(lock, now, now)
+			return true
 		}
+		st, serr := os.Stat(lock)
+		if !os.IsExist(err) || (serr == nil && now.Sub(st.ModTime()) < lockFreshFor) {
+			return false
+		}
+		_ = os.Remove(lock)
+	}
+	return false
+}
+
+// NewSpawner guards start with <AccountsRoot>/cache/refresh.lock: a lock
+// younger than 60s means a refresh is already running.
+func NewSpawner(p paths.Paths, now func() time.Time, start func() error) func() error {
+	lock := lockPath(p)
+	return func() error {
 		if err := os.MkdirAll(filepath.Dir(lock), cacheDirMode); err != nil {
 			return err
 		}
-		if err := os.WriteFile(lock, nil, lockFileMode); err != nil {
-			return err
+		if !takeLock(lock, now()) {
+			return nil
 		}
-		stamp := now()
-		_ = os.Chtimes(lock, stamp, stamp)
 		return start()
 	}
 }

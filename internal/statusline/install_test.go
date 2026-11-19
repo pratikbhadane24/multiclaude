@@ -173,3 +173,27 @@ func TestUninstallNotInstalled(t *testing.T) {
 		}
 	}
 }
+
+func TestUninstallFirstMemberWithNonCanonicalNextKeyDoesNotPanic(t *testing.T) {
+	for _, next := range []string{`"a&b"`, `"a\u0026b"`, `"\u00e9"`} {
+		doc := `{"statusLine":{"type":"command","command":"/opt/ccm statusline"},` + next + `:1}`
+
+		un, err := PlanUninstall([]byte(doc))
+
+		if err != nil || string(un.Content) != `{`+next+`:1}` {
+			t.Fatalf("next=%s err=%v content=%q", next, err, un.Content)
+		}
+	}
+}
+
+func TestInstallWithAmpersandKeysRoundTrips(t *testing.T) {
+	orig := `{"a&b":1,"c\u0026d":2}`
+	inst, err := PlanInstall([]byte(orig), "/opt/ccm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	un, err := PlanUninstall(inst.Content)
+	if err != nil || string(un.Content) != orig {
+		t.Fatalf("err=%v content=%q", err, un.Content)
+	}
+}

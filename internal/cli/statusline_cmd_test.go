@@ -156,8 +156,14 @@ func TestStatuslineUninstallRestoresOriginal(t *testing.T) {
 	if code != ExitOK || readFile(t, settingsPath(e)) != cavemanSettings {
 		t.Fatalf("code=%d\n%s", code, readFile(t, settingsPath(e)))
 	}
-	if len(backups(e)) != 1 {
-		t.Fatalf("second backup in same second overwrites the first; backups=%v", backups(e))
+	bs := backups(e)
+	if len(bs) != 2 || bs[0] == bs[1] {
+		t.Fatalf("want two distinct backups for same-second install+uninstall; backups=%v", bs)
+	}
+	for _, b := range bs {
+		if !strings.Contains(readFile(t, b), `"theme"`) {
+			t.Fatalf("backup %s lost content", b)
+		}
 	}
 }
 
@@ -245,5 +251,61 @@ func TestCacheJSONHasNoSecrets(t *testing.T) {
 	var v map[string]any
 	if json.Unmarshal([]byte(b), &v) != nil || strings.Contains(b, testToken) {
 		t.Fatalf("bad cache: %s", b)
+	}
+}
+
+func TestStatuslineSymlinkedSettingsStaysLinked(t *testing.T) {
+	e := newCLI(t, "y\n")
+	target := filepath.Join(e.p.Home, "dotfiles", "claude-settings.json")
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte(cavemanSettings), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, settingsPath(e)); err != nil {
+		t.Fatal(err)
+	}
+
+	if code := e.main("statusline", "install"); code != ExitOK {
+		t.Fatalf("code=%d %s", code, e.err)
+	}
+
+	assertLink := func(stage string) {
+		t.Helper()
+		st, err := os.Lstat(settingsPath(e))
+		if err != nil || st.Mode()&os.ModeSymlink == 0 {
+			t.Fatalf("%s: settings.json is no longer a symlink (%v)", stage, err)
+		}
+	}
+	assertLink("install")
+	if !strings.Contains(readFile(t, target), "/bin/ccm statusline --wrap") {
+		t.Fatalf("target not updated: %s", readFile(t, target))
+	}
+	e.app.In = strings.NewReader("y\n")
+	if code := e.main("statusline", "uninstall"); code != ExitOK {
+		t.Fatalf("code=%d %s", code, e.err)
+	}
+	assertLink("uninstall")
+	if readFile(t, target) != cavemanSettings {
+		t.Fatalf("target not restored: %s", readFile(t, target))
+	}
+}
+
+func TestStatusRefreshCacheRejectsWatchAndReleasesLock(t *testing.T) {
+	e := newCLI(t, "")
+	if code := e.main("status", "--watch", "1h", "--refresh-cache"); code != ExitUsage {
+		t.Fatalf("code=%d", code)
+	}
+	lock := filepath.Join(e.p.AccountsRoot, "cache", "refresh.lock")
+	_ = os.MkdirAll(filepath.Dir(lock), 0o700)
+	_ = os.WriteFile(lock, nil, 0o600)
+
+	if code := e.main("status", "--refresh-cache"); code != ExitOK {
+		t.Fatalf("code=%d", code)
+	}
+
+	if _, err := os.Stat(lock); !os.IsNotExist(err) {
+		t.Fatalf("lock not released: %v", err)
 	}
 }

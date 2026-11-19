@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"multiclaude/internal/fsutil"
 	"multiclaude/internal/status"
 	"multiclaude/internal/statusline"
 	"multiclaude/internal/usage"
@@ -16,7 +17,7 @@ import (
 const (
 	settingsFile     = "settings.json"
 	settingsNewMode  = 0o600
-	settingsDirMode  = 0o700
+	maxBackupTries   = 100
 	backupSuffixText = ".ccm-backup-"
 	statuslineUsage  = "statusline [--wrap \"<cmd>\"] | statusline install | statusline uninstall"
 )
@@ -63,6 +64,7 @@ func (a *App) finishStatusCache(rows []status.Row, c usage.Combined, refreshOnly
 		if err != nil {
 			return a.errorf("%v", err), true
 		}
+		statusline.ReleaseLock(a.Paths)
 		return ExitOK, true
 	}
 	if err != nil {
@@ -129,17 +131,51 @@ func (a *App) confirmAndWrite(ctx context.Context, install bool, path string, da
 
 func (a *App) applySettings(path string, old []byte, mode os.FileMode, content []byte) int {
 	if old != nil {
-		backup := fmt.Sprintf("%s%s%d", path, backupSuffixText, a.Now().Unix())
-		if err := writeFileAtomic(backup, old, mode); err != nil {
+		backup, err := writeBackup(path, old, mode, a.Now().Unix())
+		if err != nil {
 			return a.errorf("backup: %v", err)
 		}
 		a.printf("backup: %s\n", backup)
 	}
-	if err := writeFileAtomic(path, content, mode); err != nil {
+	if err := fsutil.WriteAtomic(resolveTarget(path), content, mode); err != nil {
 		return a.errorf("%v", err)
 	}
 	a.printf("updated %s\n", path)
 	return ExitOK
+}
+
+// resolveTarget follows a symlinked settings.json so the link survives the
+// atomic rename (dotfile managers keep it as a link).
+func resolveTarget(path string) string {
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		return resolved
+	}
+	return path
+}
+
+// writeBackup creates path.ccm-backup-<unix> exclusively, appending -1, -2...
+// when that name is taken, and returns the name used.
+func writeBackup(path string, data []byte, mode os.FileMode, unix int64) (string, error) {
+	base := fmt.Sprintf("%s%s%d", path, backupSuffixText, unix)
+	for n := 0; n < maxBackupTries; n++ {
+		name := base
+		if n > 0 {
+			name = fmt.Sprintf("%s-%d", base, n)
+		}
+		f, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
+		if errors.Is(err, os.ErrExist) {
+			continue
+		}
+		if err != nil {
+			return "", err
+		}
+		_, werr := f.Write(data)
+		if cerr := f.Close(); werr == nil {
+			werr = cerr
+		}
+		return name, werr
+	}
+	return "", fmt.Errorf("too many backups named %s", base)
 }
 
 // readSettings returns the file bytes and mode; a missing file yields nil data.
@@ -156,34 +192,4 @@ func readSettings(path string) ([]byte, os.FileMode, error) {
 		return nil, 0, err
 	}
 	return data, st.Mode().Perm(), nil
-}
-
-// writeFileAtomic writes data to a temp file in path's dir and renames it over path.
-func writeFileAtomic(path string, data []byte, mode os.FileMode) (err error) {
-	dir := filepath.Dir(path)
-	if err = os.MkdirAll(dir, settingsDirMode); err != nil {
-		return err
-	}
-	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".*.tmp")
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err != nil {
-			_ = os.Remove(tmp.Name())
-		}
-	}()
-	if err = tmp.Chmod(mode); err == nil {
-		_, err = tmp.Write(data)
-	}
-	if err == nil {
-		err = tmp.Sync()
-	}
-	if cerr := tmp.Close(); err == nil {
-		err = cerr
-	}
-	if err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), path)
 }

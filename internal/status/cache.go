@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"multiclaude/internal/fsutil"
 	"multiclaude/internal/paths"
 	"multiclaude/internal/usage"
 )
@@ -14,7 +15,6 @@ import (
 const (
 	cacheDirName  = "cache"
 	cacheFileName = "usage.json"
-	cacheDirMode  = 0o700
 	cacheFileMode = 0o600
 	// StateLimited is the cached state of an account with a fully used window.
 	StateLimited = "limited"
@@ -80,36 +80,7 @@ func WriteCache(p paths.Paths, rows []Row, c usage.Combined, now time.Time) erro
 	if err != nil {
 		return fmt.Errorf("encode usage cache: %w", err)
 	}
-	dir := filepath.Dir(CachePath(p))
-	if err := os.MkdirAll(dir, cacheDirMode); err != nil {
-		return fmt.Errorf("create %s: %w", dir, err)
-	}
-	return writeFileAtomic(dir, CachePath(p), data)
-}
-
-func writeFileAtomic(dir, dest string, data []byte) (err error) {
-	tmp, err := os.CreateTemp(dir, ".usage-*.tmp")
-	if err != nil {
-		return fmt.Errorf("create temp in %s: %w", dir, err)
-	}
-	defer func() {
-		if err != nil {
-			_ = os.Remove(tmp.Name())
-		}
-	}()
-	if err = tmp.Chmod(cacheFileMode); err == nil {
-		_, err = tmp.Write(data)
-	}
-	if cerr := tmp.Close(); err == nil {
-		err = cerr
-	}
-	if err != nil {
-		return fmt.Errorf("write %s: %w", tmp.Name(), err)
-	}
-	if err = os.Rename(tmp.Name(), dest); err != nil {
-		return fmt.Errorf("replace %s: %w", dest, err)
-	}
-	return nil
+	return fsutil.WriteAtomic(CachePath(p), data, cacheFileMode)
 }
 
 // ReadCache loads the usage snapshot; a missing file wraps os.ErrNotExist.
