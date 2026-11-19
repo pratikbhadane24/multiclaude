@@ -47,8 +47,18 @@ func (a *App) doctorDeps(accts []registry.Account) doctor.Deps {
 		KeychainPresent: func(ctx context.Context, acct registry.Account) (bool, error) {
 			return keychain.Present(ctx, a.Runner, acct)
 		},
+		Identity: a.loginIdentity,
 		T3HasInstance: func(acct registry.Account) (bool, error) {
 			return t3.HasInstance(a.Paths, acct, a.Paths.ShimPath)
 		},
 	}
+}
+
+// loginIdentity returns the keychain account UUID and the email of an
+// account's login; either is "" when unknown. The UUID is never printed.
+func (a *App) loginIdentity(ctx context.Context, acct registry.Account) (uuid, email string) {
+	if c, err := keychain.Read(ctx, a.Runner, acct); err == nil && c != nil {
+		uuid = c.AccountUUID
+	}
+	return uuid, a.knownEmail(ctx, acct)
 }

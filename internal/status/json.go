@@ -11,6 +11,8 @@ import (
 type jsonWindow struct {
 	UsedPct  *float64   `json:"used_pct"`
 	ResetsAt *time.Time `json:"resets_at"`
+	// Idle marks a window the API reported as null on a usable account.
+	Idle bool `json:"idle,omitempty"`
 }
 
 type jsonRow struct {
@@ -26,6 +28,10 @@ type jsonRow struct {
 	Limited      bool        `json:"limited"`
 	LinkWarnings []string    `json:"link_warnings"`
 	LinkErr      string      `json:"link_error,omitempty"`
+	Low          bool        `json:"low,omitempty"`
+	// Aliases are accounts signed in as the same login, merged into this row.
+	Aliases []string `json:"aliases,omitempty"`
+	SameAs  string   `json:"same_as,omitempty"`
 }
 
 type jsonCombined struct {
@@ -48,7 +54,7 @@ func toJSONWindow(w *usage.Window) *jsonWindow {
 	if w == nil {
 		return nil
 	}
-	return &jsonWindow{w.UsedPct, w.ResetsAt}
+	return &jsonWindow{UsedPct: w.UsedPct, ResetsAt: w.ResetsAt}
 }
 
 func toJSONRow(r Row) jsonRow {
@@ -56,13 +62,17 @@ func toJSONRow(r Row) jsonRow {
 		Account: r.Account, Email: r.Email, Plan: r.Plan, State: string(r.State), Error: r.Err,
 		LinkErr:      r.LinkErr,
 		LinkWarnings: append([]string{}, r.LinkWarnings...),
+		Aliases:      append([]string(nil), r.Aliases...),
+		SameAs:       r.SameAs,
 	}
 	if r.Usage != nil {
-		jr.FiveHour = &jsonWindow{r.Usage.FiveHour.UsedPct, r.Usage.FiveHour.ResetsAt}
-		jr.SevenDay = &jsonWindow{r.Usage.SevenDay.UsedPct, r.Usage.SevenDay.ResetsAt}
+		idle := countableRow(r)
+		jr.FiveHour = &jsonWindow{r.Usage.FiveHour.UsedPct, r.Usage.FiveHour.ResetsAt, idle && r.Usage.FiveHour.UsedPct == nil}
+		jr.SevenDay = &jsonWindow{r.Usage.SevenDay.UsedPct, r.Usage.SevenDay.ResetsAt, idle && r.Usage.SevenDay.UsedPct == nil}
 		jr.SevenOpus = toJSONWindow(r.Usage.SevenDayOpus)
 		jr.SevenSonnet = toJSONWindow(r.Usage.SevenDaySonnet)
 		jr.Limited = limitedWindow(r) != ""
+		jr.Low = !jr.Limited && lowWindow(r) != ""
 	}
 	return jr
 }

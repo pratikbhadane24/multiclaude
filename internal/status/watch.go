@@ -57,9 +57,9 @@ func (w *Watcher) Step(ctx context.Context, d Deps) ([]Row, usage.Combined) {
 		}
 		return inner(ctx, a)
 	}
-	rows, c := Collect(ctx, d)
-	w.record(d.Accounts, rows, skip)
-	return rows, c
+	raw := collectRaw(ctx, d)
+	w.record(d.Accounts, raw, skip)
+	return finalize(d, raw)
 }
 
 func (w *Watcher) record(accts []registry.Account, rows []Row, skipped map[string]usage.AccountUsage) {

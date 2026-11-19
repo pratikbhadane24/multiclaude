@@ -29,6 +29,7 @@ const (
 	maxStdin       = 1 << 20
 	fullPct        = 100.0
 	limitedMark    = "⛔"
+	lowMark        = "⚠"
 	lockFileName   = "refresh.lock"
 	cacheDirMode   = 0o700
 	lockFileMode   = 0o600
@@ -69,20 +70,36 @@ func Account(p paths.Paths, configDir string) string {
 	return filepath.Base(dir)
 }
 
-// segment renders one window; a window that already reset since the cache was
-// written is unknown ("?"), not the stale percentage.
-func segment(label string, used *float64, resets *time.Time, now time.Time) string {
+// segment renders one window. A nil window on a usable account is idle; a
+// window that already reset since the cache was written is unknown ("?"), not
+// the stale percentage. >=95% is marked low, >=100% limited.
+func segment(label string, used *float64, resets *time.Time, usable bool, now time.Time) string {
 	if used == nil {
+		if usable {
+			return label + " idle"
+		}
 		return ""
 	}
 	if resets != nil && resets.Before(now) {
 		return label + " ?"
 	}
 	s := fmt.Sprintf("%s %.0f%%", label, *used)
-	if *used >= fullPct {
+	switch {
+	case *used >= fullPct:
 		s += " " + limitedMark
+	case *used >= status.LowPct:
+		s += " " + lowMark
 	}
 	return s
+}
+
+// isUsable reports whether a cached state carries real usage numbers.
+func isUsable(state string) bool {
+	switch state {
+	case "ok", "expired-refreshed", status.StateLimited:
+		return true
+	}
+	return false
 }
 
 func ccmPart(name string, c *status.CacheAccount, now time.Time) string {
@@ -93,8 +110,12 @@ func ccmPart(name string, c *status.CacheAccount, now time.Time) string {
 	if c.State == loggedOutState {
 		return out + " (logged out)"
 	}
+	usable := isUsable(c.State)
 	var segs []string
-	for _, s := range []string{segment("5h", c.FiveHourUsed, c.FiveHourResetsAt, now), segment("7d", c.SevenDayUsed, c.SevenDayResetsAt, now)} {
+	for _, s := range []string{
+		segment("5h", c.FiveHourUsed, c.FiveHourResetsAt, usable, now),
+		segment("7d", c.SevenDayUsed, c.SevenDayResetsAt, usable, now),
+	} {
 		if s != "" {
 			segs = append(segs, s)
 		}

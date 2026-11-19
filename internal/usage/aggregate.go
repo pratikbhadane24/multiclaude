@@ -42,28 +42,34 @@ func soonest(cur *time.Time, w Window) *time.Time {
 	return cur
 }
 
-// Aggregate combines per-account usage without mutating its input.
+// Aggregate combines per-account usage without mutating its input. A nil
+// window on a countable account is idle: fully free. Accounts signed in as the
+// same login are counted once (the first in list order).
 func Aggregate(list []AccountUsage) Combined {
 	out := Combined{Excluded: []string{}}
-	for _, a := range list {
+	for _, a := range Distinct(list) {
 		if !countable(a.State) || a.Usage == nil {
 			out.Excluded = append(out.Excluded, a.Account)
 			continue
 		}
 		five, seven := a.Usage.FiveHour, a.Usage.SevenDay
-		if five.UsedPct != nil {
-			out.FiveHourLeft += leftFraction(*five.UsedPct)
-		}
-		if seven.UsedPct != nil {
-			out.SevenDayLeft += leftFraction(*seven.UsedPct)
-		}
-		if five.UsedPct != nil || seven.UsedPct != nil {
-			out.Counted++
-		}
-		if five.UsedPct != nil && seven.UsedPct != nil && *five.UsedPct < fullPct && *seven.UsedPct < fullPct {
+		out.FiveHourLeft += windowLeft(five)
+		out.SevenDayLeft += windowLeft(seven)
+		out.Counted++
+		if !exhausted(five) && !exhausted(seven) {
 			out.AvailableNow++
 		}
 		out.NextResetAt = soonest(soonest(out.NextResetAt, five), seven)
 	}
 	return out
 }
+
+// windowLeft is the free fraction; an idle (nil) window is fully free.
+func windowLeft(w Window) float64 {
+	if w.UsedPct == nil {
+		return 1
+	}
+	return leftFraction(*w.UsedPct)
+}
+
+func exhausted(w Window) bool { return w.UsedPct != nil && *w.UsedPct >= fullPct }

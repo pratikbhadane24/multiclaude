@@ -31,13 +31,26 @@ func (a *App) resolveEmail(ctx context.Context, name, email string, existing reg
 	return email, nil
 }
 
-func emailOwner(accts []registry.Account, name, email string) (string, bool) {
+// emailOwner finds another account already signed in with email. An account
+// with no registry email (main) is resolved through its login status.
+func (a *App) emailOwner(ctx context.Context, accts []registry.Account, name, email string) (string, bool) {
 	for _, o := range accts {
-		if o.Name != name && o.Email != "" && strings.EqualFold(o.Email, email) {
+		if o.Name == name {
+			continue
+		}
+		if strings.EqualFold(a.knownEmail(ctx, o), email) {
 			return o.Name, true
 		}
 	}
 	return "", false
+}
+
+// knownEmail is the registry email, else the logged-in one ("" when unknown).
+func (a *App) knownEmail(ctx context.Context, o registry.Account) string {
+	if o.Email != "" {
+		return o.Email
+	}
+	return a.authEmail(ctx, o)
 }
 
 // Add creates (or resumes) an account, links shared config, syncs MCP and logs in.
@@ -67,8 +80,9 @@ func (a *App) AddWith(ctx context.Context, name, email, open string) int {
 	if err != nil {
 		return a.errorf("%v", err)
 	}
-	if owner, dup := emailOwner(accts, name, email); dup {
-		return a.errorf("email %s is already used by account %q", email, owner)
+	if owner, dup := a.emailOwner(ctx, accts, name, email); dup {
+		fmt.Fprintf(a.Err, "ccm: email %s is already used by account %q\n", email, owner)
+		return ExitMismatch
 	}
 	dir := registry.NormalizeDir(filepath.Join(a.Paths.AccountsRoot, name), a.Paths.Home)
 	acct := registry.Account{Name: name, Dir: dir, Email: email, Browser: existing.Browser}

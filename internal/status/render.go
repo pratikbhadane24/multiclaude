@@ -17,20 +17,6 @@ const (
 	headerTail = "\tTODAY TOK\tSTATE"
 )
 
-// limitedWindow returns "5h" or "7d" when that window is fully used.
-func limitedWindow(r Row) string {
-	if r.State != usage.StateOK && r.State != usage.StateExpiredRefreshed || r.Usage == nil {
-		return ""
-	}
-	if p := r.Usage.FiveHour.UsedPct; p != nil && *p >= fullPct {
-		return "5h"
-	}
-	if p := r.Usage.SevenDay.UsedPct; p != nil && *p >= fullPct {
-		return "7d"
-	}
-	return ""
-}
-
 func hasModelWindows(rows []Row) bool {
 	for _, r := range rows {
 		if r.Usage != nil && (r.Usage.SevenDayOpus != nil || r.Usage.SevenDaySonnet != nil) {
@@ -49,33 +35,12 @@ func modelPct(w *usage.Window) string {
 
 func todayTotal(t tokens.Tokens) int64 { return t.Input + t.Output + t.CacheRead + t.CacheWrite }
 
-func stateText(r Row) string {
-	if lim := limitedWindow(r); lim != "" {
-		return "limited (" + lim + ")"
-	}
-	switch r.State {
-	case usage.StateOK:
-		return "ok"
-	case usage.StateExpiredRefreshed:
-		return "ok (token refreshed)"
-	case usage.StateLoggedOut:
-		return "logged out → ccm login " + r.Account
-	}
-	if r.Err != "" {
-		return "api error: " + r.Err
-	}
-	return "api error"
-}
-
 func rowLine(r Row, now time.Time, withModels bool) string {
-	var five, seven usage.Window
-	if r.Usage != nil {
-		five, seven = r.Usage.FiveHour, r.Usage.SevenDay
-	}
+	five, seven := Window5h(r, now), Window7d(r, now)
 	cols := []string{
-		r.Account, r.Email, r.Plan,
-		fmtPct(five.UsedPct), fmtLeft(five.UsedPct), fmtReset(five.ResetsAt, now),
-		fmtPct(seven.UsedPct), fmtLeft(seven.UsedPct), fmtReset(seven.ResetsAt, now),
+		r.DisplayName(), r.Email, r.Plan,
+		five.Used, five.Left, five.Reset,
+		seven.Used, seven.Left, seven.Reset,
 	}
 	if withModels {
 		var opus, sonnet *usage.Window
@@ -85,7 +50,7 @@ func rowLine(r Row, now time.Time, withModels bool) string {
 		cols = append(cols, modelPct(opus), modelPct(sonnet))
 	}
 	// Per-account token totals are meaningless: all accounts share one history.
-	cols = append(cols, "-", stateText(r))
+	cols = append(cols, "-", StateLabel(r))
 	for i, c := range cols {
 		if c == "" {
 			cols[i] = "-"

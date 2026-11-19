@@ -151,7 +151,7 @@ func TestAddDuplicateEmail(t *testing.T) {
 	h := newHarness(t, "")
 	h.emails[filepath.Join(h.p.AccountsRoot, "a")] = "you@x.com"
 	h.app.Add(context.Background(), "a", "you@x.com")
-	if code := h.app.Add(context.Background(), "b", "you@x.com"); code != 1 {
+	if code := h.app.Add(context.Background(), "b", "you@x.com"); code != 2 {
 		t.Fatalf("code %d", code)
 	}
 	if !strings.Contains(h.err.String(), `already used by account "a"`) {

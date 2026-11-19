@@ -31,6 +31,8 @@ type Creds struct {
 	ExpiresAt        int64
 	SubscriptionType string
 	RateLimitTier    string
+	// AccountUUID identifies the login (not the token); never printed.
+	AccountUUID string
 }
 
 // String redacts all fields so credentials cannot leak via formatting.
@@ -53,6 +55,7 @@ type payload struct {
 		ExpiresAt        int64  `json:"expiresAt"`
 		SubscriptionType string `json:"subscriptionType"`
 		RateLimitTier    string `json:"rateLimitTier"`
+		AccountUUID      string `json:"accountUuid"`
 	} `json:"claudeAiOauth"`
 }
 
@@ -98,5 +101,6 @@ func Read(ctx context.Context, r run.Runner, a registry.Account) (*Creds, error)
 		ExpiresAt:        o.ExpiresAt,
 		SubscriptionType: o.SubscriptionType,
 		RateLimitTier:    o.RateLimitTier,
+		AccountUUID:      o.AccountUUID,
 	}, nil
 }
