@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"multiclaude/internal/keychain"
+	"multiclaude/internal/paths"
 	"multiclaude/internal/registry"
 )
 
@@ -33,12 +34,16 @@ func (a *App) cmdRemove(ctx context.Context, args []string) int {
 		return a.errorf("the main account cannot be removed")
 	}
 	if *purge {
-		if err := purgeAllowed(a.Paths.AccountsRoot, filepath.Dir(a.Paths.ShimPath), acct.Dir); err != nil {
+		if err := purgeAllowed(a.Paths, acct.Dir); err != nil {
 			return a.errorf("refusing to purge: %v", err)
 		}
 	}
-	if !a.confirm(fmt.Sprintf("Remove account %q? [y/N] ", acct.Name)) {
+	yes, interrupted := a.confirm(ctx, fmt.Sprintf("Remove account %q? [y/N] ", acct.Name))
+	if !yes {
 		a.printf("Cancelled.\n")
+		if interrupted {
+			return ExitInterrupted
+		}
 		return ExitError
 	}
 	if err := registry.Save(a.Paths, registry.Without(accts, acct.Name)); err != nil {
@@ -54,38 +59,72 @@ func (a *App) cmdRemove(ctx context.Context, args []string) int {
 	return ExitOK
 }
 
-func (a *App) confirm(prompt string) bool {
-	answer, err := a.promptLine(prompt)
+// confirm asks a y/N question; interrupted reports a Ctrl-C while waiting.
+func (a *App) confirm(ctx context.Context, prompt string) (yes, interrupted bool) {
+	answer, err := a.promptLine(ctx, prompt)
 	if err != nil {
 		a.printf("\n")
-		return false
+		return false, ctx.Err() != nil
 	}
 	answer = strings.ToLower(answer)
-	return answer == "y" || answer == "yes"
+	return answer == "y" || answer == "yes", false
 }
 
-// purgeAllowed accepts only a dir strictly inside root that is not the shim dir.
-func purgeAllowed(root, shimDir, dir string) error {
+// resolved returns p with symlinks evaluated; a missing tail is kept as-is
+// after resolving its deepest existing ancestor.
+func resolved(p string) string {
+	if r, err := filepath.EvalSymlinks(p); err == nil {
+		return r
+	}
+	parent := filepath.Dir(p)
+	if parent == p {
+		return filepath.Clean(p)
+	}
+	return filepath.Join(resolved(parent), filepath.Base(p))
+}
+
+// within reports whether path is dir itself or lies inside it.
+func within(dir, path string) bool {
+	rel, err := filepath.Rel(dir, path)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// purgeAllowed accepts only a real (non-symlink) direct child of the accounts
+// root that is neither the shim dir, the Claude dir, nor home or an ancestor of them.
+func purgeAllowed(p paths.Paths, dir string) error {
 	if dir == "" || !filepath.IsAbs(dir) {
 		return fmt.Errorf("account dir %q is not an absolute path", dir)
 	}
-	clean := filepath.Clean(dir)
-	rel, err := filepath.Rel(filepath.Clean(root), clean)
-	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return fmt.Errorf("%s is outside %s", clean, root)
+	clean, root := filepath.Clean(dir), filepath.Clean(p.AccountsRoot)
+	if filepath.Dir(clean) != root {
+		return fmt.Errorf("%s is outside %s (must be a direct child)", clean, root)
 	}
-	if clean == filepath.Clean(shimDir) {
+	if resolved(filepath.Dir(clean)) != resolved(root) {
+		return fmt.Errorf("%s resolves outside %s", clean, root)
+	}
+	if fi, err := os.Lstat(clean); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("%s is a symlink", clean)
+	}
+	target := filepath.Join(resolved(filepath.Dir(clean)), filepath.Base(clean))
+	if target == resolved(filepath.Dir(p.ShimPath)) {
 		return fmt.Errorf("%s is the shim directory", clean)
+	}
+	for _, protected := range []string{p.ClaudeDir, p.Home} {
+		if protected != "" && within(target, resolved(protected)) {
+			return fmt.Errorf("%s contains %s", clean, protected)
+		}
 	}
 	return nil
 }
 
 // purge deletes the account dir and its Keychain item.
 func (a *App) purge(ctx context.Context, acct registry.Account) int {
+	code := ExitOK
 	if err := os.RemoveAll(acct.Dir); err != nil {
-		return a.errorf("delete %s: %v", acct.Dir, err)
+		code = a.errorf("could not fully delete %s: %v\nLeftover files remain; remove them with: rm -rf %q", acct.Dir, err, acct.Dir)
+	} else {
+		a.printf("Deleted %s.\n", acct.Dir)
 	}
-	a.printf("Deleted %s.\n", acct.Dir)
 	svc := keychain.Service(acct.Dir)
 	res, err := a.Runner.Run(ctx, securityBin, []string{"delete-generic-password", "-s", svc}, nil, false)
 	if err != nil {
@@ -93,8 +132,8 @@ func (a *App) purge(ctx context.Context, acct registry.Account) int {
 	}
 	if res.Code != 0 {
 		a.warnf("no Keychain item %q deleted (security exited %d)", svc, res.Code)
-		return ExitOK
+		return code
 	}
 	a.printf("Deleted Keychain item %q.\n", svc)
-	return ExitOK
+	return code
 }

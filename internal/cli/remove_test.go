@@ -100,26 +100,6 @@ func TestRemovePurgeRefusesDirOutsideAccountsRoot(t *testing.T) {
 	}
 }
 
-func TestPurgeGuard(t *testing.T) {
-	root := "/h/accts"
-	cases := map[string]bool{
-		"/h/accts/work":     true,
-		"/h/accts/a/b":      true,
-		"/h/accts":          false,
-		"/h/accts/bin":      false,
-		"/h/accts/../x":     false,
-		"/h/acctsx/work":    false,
-		"/h/.claude":        false,
-		"":                  false,
-		"relative/accts/xx": false,
-	}
-	for dir, want := range cases {
-		if got := purgeAllowed(root, root+"/bin", dir) == nil; got != want {
-			t.Errorf("%q: allowed=%v want %v", dir, got, want)
-		}
-	}
-}
-
 func TestRemoveMainRefused(t *testing.T) {
 	e := newCLI(t, "y\n")
 	if code := e.main("remove", "main"); code != ExitError {

@@ -27,7 +27,11 @@ func (a *App) loginOne(ctx context.Context, acct registry.Account) int {
 	if err != nil {
 		a.warnf("%s: %v; using copy", acct.Name, err)
 	}
-	st, err := auth.LoginWith(ctx, a.Runner, a.Paths, acct, acct.Email, auth.LoginOptions{SelfExe: a.SelfExe, Mode: mode})
+	if a.SelfExe == "" {
+		a.warnf("could not resolve ccm path; Claude may open your default browser")
+	}
+	// Detach from ctx so Ctrl-C reaches claude (foreground) instead of killing it mid-OAuth.
+	st, err := auth.LoginWith(context.WithoutCancel(ctx), a.Runner, a.Paths, acct, acct.Email, auth.LoginOptions{SelfExe: a.SelfExe, Mode: mode})
 	var mm *auth.MismatchError
 	if errors.As(err, &mm) {
 		fmt.Fprintf(a.Err, "ccm: signed in as %s but account %q expects %s. Run `ccm login %s` again using the right Claude account.\n", mm.Got, acct.Name, mm.Want, acct.Name)

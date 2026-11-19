@@ -15,8 +15,8 @@ const ExitUsage = 64
 const usageText = `Usage: ccm <command> [args]
 
 Commands:
-  add <name> [--email e]        create an account and log it in
-  login <name> | --all          log in one account, or every logged-out one
+  add <name> [--email e] [--open mode]   create an account and log it in
+  login <name> [--open mode] | --all    log in one account, or every logged-out one
   list                          list accounts and their login state
   run <name> [claude args...]   run claude as an account
   <name> [claude args...]       same as run <name>
@@ -30,6 +30,12 @@ Commands:
   shell-init zsh                print shell integration for ~/.zshrc
   install                       install the shim and the ccm link
   help                          show this help
+
+Login link (--open copy|incognito|chrome:<Profile dir>):
+  copy (default)   the link is copied to the clipboard; the default browser is never auto-opened
+  incognito        open the link in a Google Chrome incognito window
+  chrome:<dir>     open the link in that Chrome profile directory (e.g. "Profile 2")
+  The chosen mode is remembered for the account.
 `
 
 type handler func(a *App, ctx context.Context, args []string) int
@@ -71,7 +77,9 @@ func (a *App) Main(ctx context.Context, args []string) int {
 func (a *App) runRegistered(ctx context.Context, name string, args []string) int {
 	accts, err := registry.Load(a.Paths)
 	if err != nil {
-		return a.errorf("%v", err)
+		// Not a known command and accounts are unreadable: report usage, not a registry failure.
+		fmt.Fprintf(a.Err, "ccm: unknown command %q (account registry unreadable: %v)\n\n%s", name, err, usageText)
+		return ExitUsage
 	}
 	if acct, ok := registry.Find(accts, name); ok {
 		return a.runAccount(ctx, acct, args)
@@ -145,4 +153,18 @@ func (a *App) findAccount(name string) (registry.Account, int, bool) {
 		return registry.Account{}, a.errorf("unknown account %q", name), false
 	}
 	return acct, ExitOK, true
+}
+
+// interruptFree lists commands that never block on input or a child, so the
+// default SIGINT behaviour (terminate) is right for them.
+var interruptFree = map[string]bool{
+	"list": true, "use": true, "sync": true, "t3-sync": true, "doctor": true,
+	"shell-init": true, "install": true, "help": true, "-h": true, "--help": true,
+}
+
+// HandlesInterrupt reports whether the command wants SIGINT delivered as a
+// cancelled context (prompts, watch loops, foreground children) instead of
+// terminating the process.
+func HandlesInterrupt(args []string) bool {
+	return len(args) > 0 && !interruptFree[args[0]]
 }

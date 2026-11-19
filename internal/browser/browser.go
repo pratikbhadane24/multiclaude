@@ -32,7 +32,7 @@ const (
 	openBin             = "/usr/bin/open"
 	pbcopyBin           = "/usr/bin/pbcopy"
 	chromeApp           = "Google Chrome"
-	httpsPrefix         = "https://"
+	httpsScheme         = "https"
 	exitRefused         = 1
 )
 
@@ -83,12 +83,24 @@ func pbcopy(text string) error {
 
 // IsOpenURLInvocation reports whether the shim was called by claude as $BROWSER.
 func IsOpenURLInvocation(args []string, getenv func(string) string) bool {
-	return len(args) == 1 && strings.HasPrefix(args[0], httpsPrefix) && getenv(EnvAccount) != ""
+	if len(args) != 1 || getenv(EnvAccount) == "" {
+		return false
+	}
+	u, err := url.Parse(args[0])
+	return err == nil && strings.EqualFold(u.Scheme, httpsScheme)
+}
+
+func urlHost(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	return u.Hostname()
 }
 
 func hostAllowed(raw string) bool {
 	u, err := url.Parse(raw)
-	if err != nil || u.Scheme != "https" || u.User != nil {
+	if err != nil || !strings.EqualFold(u.Scheme, httpsScheme) || u.User != nil {
 		return false
 	}
 	h := strings.ToLower(u.Hostname())
@@ -103,7 +115,7 @@ func hostAllowed(raw string) bool {
 // HandleOpenURL presents the login URL per the configured mode and returns an exit code.
 func HandleOpenURL(rawURL string, getenv func(string) string, r run.Runner, out io.Writer) int {
 	if !hostAllowed(rawURL) {
-		fmt.Fprintln(out, "ccm: refusing to open a URL outside Claude/Anthropic domains.")
+		fmt.Fprintf(out, "ccm: refusing to open non-Claude URL host %q\n", urlHost(rawURL))
 		return exitRefused
 	}
 	mode, err := ParseMode(getenv(EnvMode))

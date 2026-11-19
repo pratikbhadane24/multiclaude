@@ -25,6 +25,13 @@ func TestOSRunNonZeroIsNotError(t *testing.T) {
 	}
 }
 
+func TestOSRunKilledBySignalMapsTo128PlusSig(t *testing.T) {
+	res, err := OS.Run(context.Background(), "/bin/sh", []string{"-c", "kill -9 $$"}, nil, false)
+	if err != nil || res.Code != 137 {
+		t.Fatalf("res=%+v err=%v", res, err)
+	}
+}
+
 func TestOSRunStartFailureIsError(t *testing.T) {
 	if _, err := OS.Run(context.Background(), "/nonexistent/bin", nil, nil, false); err == nil {
 		t.Fatal("expected error")
