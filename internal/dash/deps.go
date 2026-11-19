@@ -95,12 +95,16 @@ const (
 type (
 	snapshotMsg struct {
 		snap Snapshot
-		at   time.Time
+		// started is when the collection began (it may predate a claude exit).
+		started time.Time
+		at      time.Time
 	}
 	tickMsg     struct{}
 	execDoneMsg struct {
 		label string
-		err   error
+		// account is set for a claude launch: the account that just ran.
+		account string
+		err     error
 	}
 	doctorMsg struct{ checks []doctor.Check }
 	toastMsg  struct{ job, text string }

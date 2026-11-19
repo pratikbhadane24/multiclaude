@@ -26,6 +26,7 @@ func Demo(d Deps) Deps {
 	d.Self = func(args ...string) *exec.Cmd {
 		return exec.Command(demoEcho, append([]string{"demo: would run ccm"}, args...)...)
 	}
+	d.LatestSession = func() (string, error) { return "demo-session", nil }
 	d.Run = func(context.Context, string, []string) error { return nil }
 	d.Doctor = func(context.Context) []doctor.Check { return demoChecks() }
 	d.Sync = func(context.Context) (string, error) { return "work: up to date\nside: up to date\n", nil }

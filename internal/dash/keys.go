@@ -14,7 +14,7 @@ const noAccountText = "no account yet — press a to add one"
 // keyHelp lists every key in footer order: key, short label, help text.
 var keyHelp = []struct{ key, label, help string }{
 	{"↑↓", "select", "move the selection (also j / k)"},
-	{"⏎", "launch", "run claude as the selected account here; you return here when it exits"},
+	{"⏎", "launch", "run claude as the selected account here; you return here when it exits. A limited account offers the best one instead; if it hits its limit while you work, you're offered to continue the chat on another account"},
 	{"b", "best", "run claude as the account with the most headroom"},
 	{"n", "new window", "open the selected account in a new Terminal window"},
 	{"l", "login", "log the selected account in (browser)"},
@@ -38,6 +38,8 @@ func (m Model) onKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.onDoctorKey(k)
 	case modeAddName, modeAddEmail:
 		return m.onInputKey(k)
+	case modeConfirm:
+		return m.onConfirmKey(k)
 	}
 	return m.onListKey(k)
 }
@@ -85,7 +87,7 @@ func (m Model) onAccountKey(k string) (tea.Model, tea.Cmd) {
 	}
 	switch k {
 	case "enter":
-		return m.launch(name)
+		return m.enter(name)
 	case "n":
 		return m.withToast("opening a new Terminal window…"), m.newWindow(name)
 	}

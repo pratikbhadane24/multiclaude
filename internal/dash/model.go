@@ -19,6 +19,7 @@ const (
 	modeDoctor
 	modeAddName
 	modeAddEmail
+	modeConfirm
 )
 
 const (
@@ -51,6 +52,13 @@ type Model struct {
 
 	// running holds in-flight background jobs (doctor, sync, t3-sync).
 	running map[string]bool
+
+	// prompt is the open [y/N] question (modeConfirm).
+	prompt confirm
+	// handoffFrom is the account claude just exited on; the first snapshot
+	// collected after handoffAfter decides whether to offer a handoff.
+	handoffFrom  string
+	handoffAfter time.Time
 }
 
 // New returns a dashboard model; ctx bounds in-process work.
@@ -80,7 +88,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		return m.resized(msg.Width, msg.Height), nil
 	case snapshotMsg:
-		return m.withSnapshot(msg), nil
+		return m.withSnapshot(msg).afterSnapshot(msg)
 	case tickMsg:
 		return m.onTick()
 	case execDoneMsg:
@@ -160,6 +168,9 @@ func (m Model) onExecDone(msg execDoneMsg) (tea.Model, tea.Cmd) {
 		m = m.withToast(msg.label + " exited: " + msg.err.Error())
 	} else {
 		m = m.withToast(msg.label + " finished")
+	}
+	if msg.account != "" {
+		m.handoffFrom, m.handoffAfter = msg.account, m.deps.Now()
 	}
 	return m.refresh()
 }

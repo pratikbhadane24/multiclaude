@@ -33,8 +33,9 @@ func NewWindowArgv(selfPath, name string) []string {
 
 func (m Model) collectCmd() tea.Cmd {
 	ctx, collect, now := m.ctx, m.deps.Collect, m.deps.Now
+	started := now()
 	return func() tea.Msg {
-		return snapshotMsg{snap: collect(ctx), at: now()}
+		return snapshotMsg{snap: collect(ctx), started: started, at: now()}
 	}
 }
 
@@ -47,12 +48,16 @@ func (m Model) execCmd(c *exec.Cmd, label string) tea.Cmd {
 	return m.deps.Exec(c, func(err error) tea.Msg { return execDoneMsg{label: label, err: err} })
 }
 
-func (m Model) launch(name string) (Model, tea.Cmd) {
-	c, err := m.deps.Launch(name, nil)
+// launch hands the terminal to claude as name with extra args; its exit is
+// reported with the account so a handoff can be offered.
+func (m Model) launch(name string, extra []string) (Model, tea.Cmd) {
+	c, err := m.deps.Launch(name, extra)
 	if err != nil {
 		return m.withToast(fmt.Sprintf("launch %s: %v", name, err)), nil
 	}
-	return m.withToast("launched claude as " + name), m.execCmd(c, "claude ("+name+")")
+	label := "claude (" + name + ")"
+	cmd := m.deps.Exec(c, func(err error) tea.Msg { return execDoneMsg{label: label, account: name, err: err} })
+	return m.withToast("launched claude as " + name), cmd
 }
 
 func (m Model) launchBest() (Model, tea.Cmd) {
@@ -60,7 +65,7 @@ func (m Model) launchBest() (Model, tea.Cmd) {
 	if name == "" {
 		return m.withToast("no usable account right now"), nil
 	}
-	return m.launch(name)
+	return m.launch(name, nil)
 }
 
 func (m Model) newWindow(name string) tea.Cmd {

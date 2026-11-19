@@ -57,16 +57,18 @@ func (a *App) cmdDash(ctx context.Context, args []string) int {
 
 func (a *App) dashDeps() dashboard.Deps {
 	return dashboard.Deps{
-		Collect:  a.dashCollect,
-		Launch:   a.LaunchCmd,
-		Self:     a.selfCmd,
-		SelfPath: a.selfPath(),
-		Run:      a.runQuiet,
-		Doctor:   a.dashDoctor,
-		Sync:     a.captured((*App).cmdSync),
-		T3Sync:   a.captured((*App).cmdT3Sync),
-		ArgsFor:  a.dashArgsFor,
-		Now:      a.Now,
+		Collect: a.dashCollect,
+		Launch:  a.LaunchCmd,
+
+		LatestSession: a.dashLatestSession,
+		Self:          a.selfCmd,
+		SelfPath:      a.selfPath(),
+		Run:           a.runQuiet,
+		Doctor:        a.dashDoctor,
+		Sync:          a.captured((*App).cmdSync),
+		T3Sync:        a.captured((*App).cmdT3Sync),
+		ArgsFor:       a.dashArgsFor,
+		Now:           a.Now,
 	}
 }
 

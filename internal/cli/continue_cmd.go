@@ -104,9 +104,23 @@ func (a *App) continueSession(accts []registry.Account, from registry.Account, e
 	if explicit != "" {
 		return explicit, ExitOK, true
 	}
+	id, err := a.latestSessionID(accts)
+	if err != nil {
+		return "", a.errorf("%v", err), false
+	}
+	return id, ExitOK, true
+}
+
+// errNoConversation is returned when shared history has no session for cwd.
+var errNoConversation = errors.New("no conversation found for this folder in shared history")
+
+// latestSessionID is the newest session for the working directory, looked up
+// in main's projects dir (shared by every account). Used by `ccm continue`
+// and the dashboard's continue prompt.
+func (a *App) latestSessionID(accts []registry.Account) (string, error) {
 	cwd, err := getwd()
 	if err != nil {
-		return "", a.errorf("current directory: %v", err), false
+		return "", fmt.Errorf("current directory: %w", err)
 	}
 	mainAcct, found := registry.Find(accts, consts.MainName)
 	if !found {
@@ -114,12 +128,21 @@ func (a *App) continueSession(accts []registry.Account, from registry.Account, e
 	}
 	s, err := handoff.FindLatest(a.Paths, mainAcct, cwd)
 	if errors.Is(err, handoff.ErrNoSession) {
-		return "", a.errorf("no conversation found for this folder in shared history"), false
+		return "", errNoConversation
 	}
 	if err != nil {
-		return "", a.errorf("%v", err), false
+		return "", fmt.Errorf("find latest session: %w", err)
 	}
-	return s.ID, ExitOK, true
+	return s.ID, nil
+}
+
+// dashLatestSession is latestSessionID with a fresh registry read.
+func (a *App) dashLatestSession() (string, error) {
+	accts, err := registry.Load(a.Paths)
+	if err != nil {
+		return "", err
+	}
+	return a.latestSessionID(accts)
 }
 
 func (a *App) continueTarget(accts []registry.Account, list []usage.AccountUsage, from registry.Account, name string) (registry.Account, int, bool) {
