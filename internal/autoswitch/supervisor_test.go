@@ -52,6 +52,10 @@ type step struct {
 	limit  bool
 	code   int
 	exitOn syscall.Signal
+	// elapse advances the fake clock when the run starts (its run time).
+	elapse time.Duration
+	// session is the transcript the limit is seen in ("" = unknown).
+	session string
 }
 
 type launchRec struct {
@@ -66,6 +70,7 @@ type harness struct {
 	launches []launchRec
 	marked   []string
 	waits    []time.Duration
+	tailed   []string
 	now      time.Time
 	pick     func(exclude []string) (registry.Account, bool)
 	reset    func() (registry.Account, time.Time, bool)
@@ -78,7 +83,7 @@ func (h *harness) deps() Deps {
 	return Deps{
 		Start:        h.start,
 		RelaunchArgs: func(a registry.Account, id, prompt string) []string { return []string{"--resume", id, prompt} },
-		Transcript:   func(a registry.Account) string { return "/t/" + a.Name },
+		ProjectDir:   func(a registry.Account) string { return "/t/" + a.Name },
 		Tail:         h.tail,
 		Pick: func(ex []string, _ time.Time) (registry.Account, bool) {
 			return h.pick(append([]string(nil), ex...))
@@ -101,6 +106,9 @@ func (h *harness) start(a registry.Account, args []string) (Proc, error) {
 	i := len(h.launches)
 	h.launches = append(h.launches, launchRec{a.Name, args})
 	st := h.steps[i]
+	h.mu.Lock()
+	h.now = h.now.Add(st.elapse)
+	h.mu.Unlock()
 	p := newFakeProc(st.exitOn)
 	h.procs = append(h.procs, p)
 	if !st.limit {
@@ -110,11 +118,12 @@ func (h *harness) start(a registry.Account, args []string) (Proc, error) {
 }
 
 // tail emits one limit when the run about to start is scripted to hit one.
-func (h *harness) tail(string) Follower {
+func (h *harness) tail(_, id string) Follower {
 	i := len(h.launches)
+	h.tailed = append(h.tailed, id)
 	return func(ctx context.Context, onLimit func(Limit)) {
 		if i < len(h.steps) && h.steps[i].limit {
-			onLimit(Limit{Text: "You've hit your 5-hour limit"})
+			onLimit(Limit{Text: "You've hit your 5-hour limit", Session: h.steps[i].session})
 		}
 		<-ctx.Done()
 	}
@@ -325,8 +334,28 @@ func TestRunMarkErrorIsWarningOnly(t *testing.T) {
 	}
 }
 
-func TestTranscriptPath(t *testing.T) {
-	if got := TranscriptPath("/h/.claude", "/Users/me/my proj", "abc"); got != "/h/.claude/projects/-Users-me-my-proj/abc.jsonl" {
+func TestProjectDir(t *testing.T) {
+	if got := ProjectDir("/h/.claude", "/Users/me/my proj"); got != "/h/.claude/projects/-Users-me-my-proj" {
 		t.Fatalf("got %s", got)
+	}
+}
+
+func TestRunResumesTheSessionTheLimitWasSeenIn(t *testing.T) {
+	// Arrange: /clear inside claude moved it to a new session file.
+	const cleared = "99999999-2222-4333-8444-555555555555"
+	h := &harness{
+		steps: []step{{limit: true, exitOn: syscall.SIGINT, session: cleared}, {code: 0}},
+		pick:  pickFrom("a", "b"), reset: noReset,
+	}
+
+	// Act
+	Run(context.Background(), h.deps(), acct("a"), []string{"--session-id", sid}, sid)
+
+	// Assert
+	if args := h.launches[1].args; args[1] != cleared {
+		t.Fatalf("relaunch args %q", args)
+	}
+	if fmt.Sprint(h.tailed) != fmt.Sprint([]string{sid, cleared}) {
+		t.Fatalf("tailed %v", h.tailed)
 	}
 }

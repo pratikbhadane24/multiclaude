@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"multiclaude/internal/auth"
 	"multiclaude/internal/autoswitch"
@@ -40,7 +41,11 @@ func (a *App) runSupervised(ctx context.Context, acct registry.Account, typed []
 		a.warnf("auto-switch off for this launch: %v", err)
 		return 0, false
 	}
-	return autoswitch.Run(ctx, a.autoSwitchDeps(cfg, cwd, id), acct, args, id), true
+	env, removed := autoswitch.StripCredentialEnv(os.Environ())
+	if len(removed) > 0 {
+		a.warnf("auto-switch: not passing %s to claude, so each account uses its own login", strings.Join(removed, ", "))
+	}
+	return autoswitch.Run(ctx, a.autoSwitchDeps(cfg, cwd, env), acct, args, id), true
 }
 
 // realWd is the working directory with symlinks resolved, as claude's own
@@ -66,18 +71,19 @@ func latestIn(a *App, acct registry.Account, cwd string) (string, error) {
 }
 
 // autoSwitchDeps wires the supervisor to the usage cache, the config's args
-// and the real claude binary.
-func (a *App) autoSwitchDeps(cfg config.Config, cwd, id string) autoswitch.Deps {
+// and the real claude binary, launched with env (credential variables
+// already removed).
+func (a *App) autoSwitchDeps(cfg config.Config, cwd string, env []string) autoswitch.Deps {
 	d := autoswitch.NewDeps(a.Paths)
 	d.Now, d.Err, d.PromptOverride = a.Now, a.Err, cfg.AutoSwitchPrompt
-	d.Transcript = func(acct registry.Account) string {
-		return autoswitch.TranscriptPath(handoff.ConfigDir(a.Paths, acct), cwd, id)
+	d.ProjectDir = func(acct registry.Account) string {
+		return autoswitch.ProjectDir(handoff.ConfigDir(a.Paths, acct), cwd)
 	}
 	d.RelaunchArgs = func(acct registry.Account, id, prompt string) []string {
 		return autoswitch.RelaunchArgs(config.MergedArgs(cfg, acct.Name, nil), id, prompt)
 	}
 	d.Start = func(acct registry.Account, args []string) (autoswitch.Proc, error) {
-		return a.startProc(auth.Binary(a.Paths), args, auth.Env(acct, os.Environ()))
+		return a.startProc(auth.Binary(a.Paths), args, auth.Env(acct, env))
 	}
 	return d
 }

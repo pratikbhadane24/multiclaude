@@ -19,17 +19,31 @@ func (s *supervisor) afterLimit(ctx context.Context, from registry.Account, out 
 		fmt.Fprintf(s.d.Err, "ccm: %s hit its limit — auto-switch stopped after %d switches\n", from.Name, MaxSwitches)
 		return registry.Account{}, "", out.code, false
 	}
+	floor := s.guardHit(from.Name)
 	next, ok := s.d.Pick(s.chain, s.d.Now())
 	if !ok {
-		return s.waitForReset(ctx, out.code)
+		return s.waitForReset(ctx, out.code, floor)
 	}
-	if !s.sleep(ctx, s.gapLeft()) {
+	if !s.sleep(ctx, max(s.gapLeft(), floor)) {
 		return registry.Account{}, "", exitInterrupted, false
 	}
 	fmt.Fprintf(s.d.Err, "ccm: %s hit its limit — continuing on %s\n", from.Name, next.Name)
 	s.chain = append(s.chain, next.Name)
 	s.switches, s.lastSwitch = s.switches+1, s.d.Now()
 	return next, BuildResumePrompt(from.Name, next.Name, false, s.d.PromptOverride), 0, true
+}
+
+// guardHit records a hit on name in the reset guard and returns the least
+// wait before the next relaunch, announcing a backoff.
+func (s *supervisor) guardHit(name string) time.Duration {
+	now := s.d.Now()
+	g, quick := s.guard.hit(name, now)
+	s.guard = g
+	if quick {
+		fmt.Fprintf(s.d.Err, "ccm: %s hit its limit again within %s of its reset — backing off %s\n",
+			name, status.FormatDuration(quickRehit), status.FormatDuration(g.backoff))
+	}
+	return g.floor(now)
 }
 
 // gapLeft is how long to wait so two switches are MinSwitchGap apart.
@@ -40,16 +54,17 @@ func (s *supervisor) gapLeft() time.Duration {
 	return max(0, MinSwitchGap-s.d.Now().Sub(s.lastSwitch))
 }
 
-// waitForReset waits for the soonest known reset (+ResetSlack) and starts a
-// new chain on that account; without a known reset it gives up with code.
-func (s *supervisor) waitForReset(ctx context.Context, code int) (registry.Account, string, int, bool) {
+// waitForReset waits for the soonest known reset (+ResetSlack, but at least
+// floor) and starts a new chain on that account; without a known reset it
+// gives up with code.
+func (s *supervisor) waitForReset(ctx context.Context, code int, floor time.Duration) (registry.Account, string, int, bool) {
 	now := s.d.Now()
 	acct, at, ok := s.d.NextReset(now)
 	if !ok {
 		fmt.Fprintln(s.d.Err, "ccm: all accounts are limited — next reset unknown")
 		return registry.Account{}, "", code, false
 	}
-	wait := at.Add(ResetSlack).Sub(now)
+	wait := max(at.Add(ResetSlack).Sub(now), floor)
 	fmt.Fprintf(s.d.Err, "ccm: all accounts are limited — next reset %s on %s (in %s); waiting, Ctrl-C to stop\n",
 		at.Local().Format(resetTimeLayout), acct.Name, status.FormatDuration(wait))
 	if !s.sleep(ctx, wait) {
@@ -58,6 +73,7 @@ func (s *supervisor) waitForReset(ctx context.Context, code int) (registry.Accou
 	}
 	fmt.Fprintf(s.d.Err, "ccm: %s has reset — continuing on %s\n", acct.Name, acct.Name)
 	s.chain, s.switches, s.lastSwitch = []string{acct.Name}, 0, s.d.Now()
+	s.guard = s.guard.relaunched(acct.Name, s.d.Now())
 	return acct, BuildResumePrompt(acct.Name, acct.Name, true, s.d.PromptOverride), 0, true
 }
 

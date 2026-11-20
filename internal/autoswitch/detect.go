@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"strings"
+	"time"
 )
 
 // rateLimitError is the transcript "error" value Claude Code writes for a
@@ -21,6 +22,11 @@ type Limit struct {
 	Reset string
 	// Weekly is true for the 7-day limit, false for the 5-hour (or unknown) one.
 	Weekly bool
+	// At is the line's timestamp (zero when absent or unreadable).
+	At time.Time
+	// Session is the id of the transcript the line was read from ("" when
+	// unknown); set by DirTail.
+	Session string
 }
 
 // limitPhrases match a usage-limit message when the error field is absent.
@@ -35,6 +41,7 @@ type transcriptEntry struct {
 	IsAPIError  bool   `json:"isApiErrorMessage"`
 	IsSidechain bool   `json:"isSidechain"`
 	Error       string `json:"error"`
+	Timestamp   string `json:"timestamp"`
 	Message     struct {
 		Content json.RawMessage `json:"content"`
 	} `json:"message"`
@@ -62,7 +69,9 @@ func DetectLimit(line []byte) (Limit, bool) {
 	default:
 		return Limit{}, false
 	}
-	return Limit{Text: text, Reset: resetText(text), Weekly: strings.Contains(strings.ToLower(text), "weekly")}, true
+	at, _ := time.Parse(time.RFC3339Nano, e.Timestamp) // zero when absent
+	weekly := strings.Contains(strings.ToLower(text), "weekly")
+	return Limit{Text: text, Reset: resetText(text), Weekly: weekly, At: at}, true
 }
 
 func isLimitText(text string) bool {
@@ -102,11 +111,13 @@ func contentText(raw json.RawMessage) string {
 	return strings.Join(texts, "\n")
 }
 
-// resetText is what follows "resets " in text (trimmed), or "".
+// resetText is what follows "resets " (or "reset ", as in "will reset at
+// 5pm") in text, trimmed, or "".
 func resetText(text string) string {
-	_, after, ok := strings.Cut(text, "resets ")
-	if !ok {
-		return ""
+	for _, word := range []string{resetsWord, resetWord} {
+		if _, after, ok := strings.Cut(text, word); ok {
+			return strings.TrimSpace(after)
+		}
 	}
-	return strings.TrimSpace(after)
+	return ""
 }
