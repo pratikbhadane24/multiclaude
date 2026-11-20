@@ -30,8 +30,12 @@ func (a *App) cmdRun(ctx context.Context, args []string) int {
 // terminal and it decides how to exit.
 //
 // The configured default and per-account args are prepended to args; a broken
-// config is reported and the launch continues without it.
+// config is reported and the launch continues without it. With auto-switch
+// on, the auto-switch supervisor runs claude instead.
 func (a *App) runAccount(ctx context.Context, acct registry.Account, args []string) int {
+	if code, ok := a.runSupervised(ctx, acct, args); ok {
+		return code
+	}
 	l, err := a.buildLaunch(acct, args)
 	if err != nil {
 		a.warnf("ignoring config: %v", err)

@@ -13,6 +13,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/term"
 
+	"multiclaude/internal/config"
 	dashboard "multiclaude/internal/dash"
 	"multiclaude/internal/doctor"
 	"multiclaude/internal/registry"
@@ -87,8 +88,9 @@ func (a *App) dashCollect(ctx context.Context, opts dashboard.CollectOptions) da
 	deps.ShowDuplicates = opts.ShowDuplicates
 	rows, combined := status.Collect(ctx, deps)
 	cacheErr := errors.Join(cf.Err(), status.WriteCache(a.Paths, rows, combined, a.Now()))
+	cfg, _ := config.Load(a.Paths) // a broken config shows no badge; launches report it
 	return dashboard.Snapshot{Rows: rows, Combined: combined, Accounts: accts,
-		Today: combined.Today, TodayErr: combined.TodayErr, CacheErr: cacheErr}
+		Today: combined.Today, TodayErr: combined.TodayErr, CacheErr: cacheErr, AutoSwitch: cfg.AutoSwitch}
 }
 
 func (a *App) dashDoctor(ctx context.Context) []doctor.Check {

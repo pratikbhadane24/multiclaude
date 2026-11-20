@@ -119,6 +119,25 @@ They are also copied into T3 Code. Run `ccm t3-sync` after changing them. If you
 
 **Security note, in plain words:** `--dangerously-skip-permissions` tells Claude to run commands and edit files without asking you first. Anything Claude decides to do, it does. Only use it in folders and projects you trust, and remember it applies to every account and every T3 instance once it is a default. Remove it with `ccm config clear default-args`.
 
+## Auto-switch
+
+Let ccm move a running conversation to another account by itself when the current one hits its usage limit, with no keypress (useful when you are away from the computer):
+
+```sh
+ccm config set auto-switch on      # off to disable; shown in `ccm config show`
+ccm config set auto-switch-prompt "keep going"   # optional: replace the resume prompt
+ccm config clear auto-switch-prompt
+```
+
+It applies to every interactive launch: `ccm <name>`, `run`, `best`, `continue` and ⏎ in the dashboard (which shows `⟳ auto-switch` and skips its "Continue on X?" prompt). With it on:
+
+1. Each launch pins a known conversation: a new chat gets `--session-id <uuid>`, `--resume <id>` is kept and `--continue` is turned into `--resume <latest id for this folder>`. A bare `--resume` (the picker), a search term or `--fork-session` cannot be followed, so that launch runs without auto-switch (with a warning).
+2. While claude runs, ccm watches the conversation transcript (`projects/<folder>/<id>.jsonl`). When Claude Code records a usage-limit error there (`"isApiErrorMessage":true` with `"error":"rate_limit"`), ccm stops claude (Ctrl-C, then SIGTERM after 2s, SIGKILL after 5s more), marks that account limited in the usage cache, picks the account with the most headroom from the cache (no extra usage request; same-login duplicates count once), prints `ccm: work hit its limit — continuing on main` and resumes the same conversation there with your default/per-account args, `--resume <id>` and a prompt telling Claude to check what was already done and carry on.
+3. It keeps going from account to account. If every account is limited it prints `ccm: all accounts are limited — next reset …`, waits until the soonest known reset plus a minute, and resumes on that account. Ctrl-C while waiting stops cleanly (exit 130). With no known reset time it stops.
+4. Quitting claude yourself never switches. At most 10 switches happen per chain and two switches are always at least 30 seconds apart.
+
+Server errors, overloaded/network errors, billing and login errors never trigger a switch.
+
 ## Shared history
 
 Every account sees the same chats. Run `/resume` in any account and all conversations (and project memory, file history, todos, plans) are listed, so when one account is limited you can pick up on another.
@@ -171,6 +190,8 @@ ccm remove <name> --purge    # also delete its folder and Keychain login
 | `ccm config set default-args <args...>` | Args for every launch. Everything after the key is taken verbatim, including `--flags`. |
 | `ccm config set args <account> <args...>` | Extra args for one account. |
 | `ccm config clear default-args` / `ccm config clear args <account>` | Remove them. Run `ccm t3-sync` after. |
+| `ccm config set auto-switch on\|off` | Resume on another account automatically when one hits its limit (see Auto-switch). |
+| `ccm config set auto-switch-prompt <text>` / `ccm config clear auto-switch-prompt` | Replace (or restore) the prompt sent after a switch. |
 | `ccm sync` | Link shared items, merge account history, copy MCP servers into every account. |
 | `ccm t3-sync` | Add or update one `claude-<account>` instance per account and sync `launchArgs`. Backs up T3 settings; restart T3 after. |
 | `ccm doctor [--fix]` | Check (and repair) the setup. Exit 0 only if nothing fails or warns. |

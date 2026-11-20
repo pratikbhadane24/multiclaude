@@ -15,6 +15,7 @@ import (
 const (
 	skipPermsArg = "--dangerously-skip-permissions"
 	badgeText    = "⚠ skip-permissions"
+	autoBadge    = "⟳ auto-switch"
 	sep          = " · "
 	// paneChrome is the number of lines around the doctor pane (title, blank, footer).
 	paneChrome = 3
@@ -94,6 +95,9 @@ func (m Model) headerLines() []string {
 	}
 	if slices.Contains(m.selectedArgs(), skipPermsArg) {
 		extra = append(extra, styleBadge.Render(badgeText))
+	}
+	if m.snap.AutoSwitch {
+		extra = append(extra, styleOK.Render(autoBadge))
 	}
 	lines := []string{strings.Join(parts, sep)}
 	if len(extra) > 0 {

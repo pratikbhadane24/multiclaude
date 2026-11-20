@@ -234,7 +234,7 @@ func (m Model) onExecDone(msg execDoneMsg) (tea.Model, tea.Cmd) {
 	} else {
 		m = m.withToast(msg.label + " finished")
 	}
-	if msg.account != "" {
+	if msg.account != "" && !m.snap.AutoSwitch {
 		m.handoffFrom, m.handoffAfter, m.handoffSession = msg.account, m.deps.Now(), msg.session
 	}
 	return m.refresh()

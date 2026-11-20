@@ -29,6 +29,11 @@ type AccountConfig struct {
 type Config struct {
 	DefaultArgs []string                 `json:"defaultArgs,omitempty"`
 	Accounts    map[string]AccountConfig `json:"accounts,omitempty"`
+	// AutoSwitch resumes an interactive session on another account when the
+	// current one hits its usage limit.
+	AutoSwitch bool `json:"autoSwitch,omitempty"`
+	// AutoSwitchPrompt, when set, replaces the built-in resume prompt.
+	AutoSwitchPrompt string `json:"autoSwitchPrompt,omitempty"`
 }
 
 func filePath(p paths.Paths) string { return filepath.Join(p.AccountsRoot, fileName) }

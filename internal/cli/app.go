@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"multiclaude/internal/autoswitch"
 	"multiclaude/internal/paths"
 	"multiclaude/internal/run"
 )
@@ -34,6 +35,9 @@ type App struct {
 	In     io.Reader
 	// SelfExe is the ccm binary used as $BROWSER during login; empty disables link handling.
 	SelfExe string
+	// StartProc starts claude under the auto-switch supervisor; nil uses a
+	// real process on the terminal.
+	StartProc func(bin string, args, env []string) (autoswitch.Proc, error)
 }
 
 func (a *App) errorf(format string, args ...any) int {

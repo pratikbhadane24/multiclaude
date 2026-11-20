@@ -49,6 +49,9 @@ func (a *App) LaunchCmd(name string, extra []string) (c *exec.Cmd, warning strin
 	if !ok {
 		return nil, "", fmt.Errorf("unknown account %q", name)
 	}
+	if c, ok := a.supervisedLaunchCmd(name, extra); ok {
+		return c, "", nil
+	}
 	l, cfgErr := a.buildLaunch(acct, extra)
 	if cfgErr != nil {
 		warning = cfgErr.Error()
@@ -56,6 +59,18 @@ func (a *App) LaunchCmd(name string, extra []string) (c *exec.Cmd, warning strin
 	c = exec.Command(l.Bin, l.Args...)
 	c.Env = l.Env
 	return c, warning, nil
+}
+
+// supervisedLaunchCmd is `ccm run <name> extra...` when auto-switch is on and
+// the ccm binary is known, so dashboard launches get the same supervisor.
+func (a *App) supervisedLaunchCmd(name string, extra []string) (*exec.Cmd, bool) {
+	cfg, err := config.Load(a.Paths)
+	if err != nil || !cfg.AutoSwitch || a.SelfExe == "" {
+		return nil, false
+	}
+	c := exec.Command(a.SelfExe, append([]string{"run", name}, extra...)...)
+	c.Env = os.Environ()
+	return c, true
 }
 
 // dashArgsFor is the merged launch args shown by the dashboard (details pane

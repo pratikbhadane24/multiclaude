@@ -31,6 +31,9 @@ type Snapshot struct {
 	TodayErr string
 	// CacheErr is a failed write of the status line's usage cache.
 	CacheErr error
+	// AutoSwitch is the auto-switch setting: launches resume on another
+	// account by themselves, so no handoff prompt is offered.
+	AutoSwitch bool
 }
 
 // CollectOptions tune one collection.

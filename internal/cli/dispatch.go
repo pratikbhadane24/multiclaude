@@ -35,6 +35,8 @@ Commands:
   config set default-args <args...>      args added to every launch (e.g. --dangerously-skip-permissions)
   config set args <account> <args...>    extra args for one account
   config clear default-args | args <account>
+  config set auto-switch on|off          resume on another account when one hits its limit
+  config set auto-switch-prompt <text>   replace the resume prompt (clear auto-switch-prompt)
   doctor [--fix]                check (and repair) the setup
   remove <name> [--purge]       unregister an account (--purge deletes its data)
   shell-init zsh                print shell integration for ~/.zshrc
