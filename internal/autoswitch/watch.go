@@ -38,6 +38,11 @@ func NewTail(path string) *Tail {
 	return t
 }
 
+// newTailAt follows path from offset.
+func newTailAt(path string, offset int64) *Tail {
+	return &Tail{path: path, offset: offset}
+}
+
 // Follow polls the file every poll until ctx ends, calling onLimit for each
 // new usage-limit line. Read errors are retried on the next poll.
 func (t *Tail) Follow(ctx context.Context, poll time.Duration, onLimit func(Limit)) {

@@ -25,6 +25,9 @@ const (
 	termGrace = 5 * time.Second
 	// ResetSlack is added to a reset time before relaunching on it.
 	ResetSlack = 60 * time.Second
+	// UnknownResetHold is how long a limit hit without a usable reset time
+	// keeps the account marked limited.
+	UnknownResetHold = time.Hour
 	// exitError and exitInterrupted mirror the cli exit codes.
 	exitError       = 1
 	exitInterrupted = 130
@@ -51,10 +54,11 @@ type Deps struct {
 	RelaunchArgs func(acct registry.Account, id, prompt string) []string
 	// PromptOverride replaces the built-in resume prompts when non-empty.
 	PromptOverride string
-	// Transcript is the path of the session transcript seen by acct.
-	Transcript func(acct registry.Account) string
-	// Tail starts following path from its current end (synchronously).
-	Tail func(path string) Follower
+	// ProjectDir is the project transcript directory seen by acct.
+	ProjectDir func(acct registry.Account) string
+	// Tail snapshots dir and starts following session id from its current
+	// end (synchronously); limits carry the session they were seen in.
+	Tail func(dir, id string) Follower
 	Pick func(exclude []string, now time.Time) (registry.Account, bool)
 	// NextReset is the account usable soonest and when.
 	NextReset func(now time.Time) (registry.Account, time.Time, bool)
@@ -66,11 +70,11 @@ type Deps struct {
 }
 
 // NewDeps returns Deps backed by the usage cache in p and real time; the
-// caller sets Start, RelaunchArgs, Transcript and Err.
+// caller sets Start, RelaunchArgs, ProjectDir and Err.
 func NewDeps(p paths.Paths) Deps {
 	return Deps{
-		Tail: func(path string) Follower {
-			t := NewTail(path)
+		Tail: func(dir, id string) Follower {
+			t := NewDirTail(dir, id, time.Now())
 			return func(ctx context.Context, onLimit func(Limit)) { t.Follow(ctx, DefaultPoll, onLimit) }
 		},
 		Pick:      func(ex []string, now time.Time) (registry.Account, bool) { return PickNext(p, ex, now) },
@@ -82,19 +86,22 @@ func NewDeps(p paths.Paths) Deps {
 	}
 }
 
-// MarkLimit records in the usage cache that name hit l (reset time parsed
-// from the message when possible).
+// MarkLimit records in the usage cache that name hit l. The reset time is
+// parsed from the message; when that fails (or is not in the future) it is
+// now+UnknownResetHold, so a stale cached reset can never make the account
+// look usable at once.
 func MarkLimit(p paths.Paths, name string, l Limit, now time.Time) error {
-	m := status.LimitMark{Name: name, Weekly: l.Weekly}
-	if at, ok := ParseReset(l.Reset, now); ok && l.Reset != "" {
-		m.ResetsAt = &at
+	at, ok := ParseReset(l.Reset, now)
+	if !ok || !at.After(now) {
+		at = now.Add(UnknownResetHold)
 	}
-	return status.MarkLimited(p, m)
+	return status.MarkLimited(p, status.LimitMark{Name: name, Weekly: l.Weekly, ResetsAt: &at})
 }
 
-// TranscriptPath is <configDir>/projects/<slug(cwd)>/<id>.jsonl.
-func TranscriptPath(configDir, cwd, id string) string {
-	return filepath.Join(configDir, "projects", handoff.Slug(cwd), id+".jsonl")
+// ProjectDir is <configDir>/projects/<slug(cwd)>, where claude keeps the
+// transcripts (<id>.jsonl) of the conversations started in cwd.
+func ProjectDir(configDir, cwd string) string {
+	return filepath.Join(configDir, "projects", handoff.Slug(cwd))
 }
 
 // supervisor runs one chain of claude launches for one session.
@@ -104,6 +111,7 @@ type supervisor struct {
 	chain      []string
 	switches   int
 	lastSwitch time.Time
+	guard      resetGuard
 }
 
 // outcome is how one claude run ended.
@@ -134,13 +142,16 @@ func Run(ctx context.Context, d Deps, first registry.Account, args []string, id 
 		if !ok {
 			return code
 		}
-		acct, args = next, d.RelaunchArgs(next, id, prompt)
+		if out.limit.Session != "" {
+			s.id = out.limit.Session // /clear or /resume moved to another chat
+		}
+		acct, args = next, d.RelaunchArgs(next, s.id, prompt)
 	}
 }
 
 // runOnce runs claude once while tailing its transcript.
 func (s *supervisor) runOnce(acct registry.Account, args []string) (outcome, error) {
-	follow := s.d.Tail(s.d.Transcript(acct))
+	follow := s.d.Tail(s.d.ProjectDir(acct), s.id)
 	proc, err := s.d.Start(acct, args)
 	if err != nil {
 		return outcome{}, err
