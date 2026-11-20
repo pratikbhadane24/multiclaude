@@ -51,6 +51,10 @@ type CacheAccount struct {
 	RateLimited  bool       `json:"rate_limited,omitempty"`
 	BackoffUntil *time.Time `json:"backoff_until,omitempty"`
 	BackoffStep  int        `json:"backoff_step,omitempty"`
+	// MarkedAt is when a limit hit was marked (MarkLimited/MarkLimitedType).
+	// Until the marked window resets, only data from a fetch started after
+	// MarkedAt replaces the marked window (see markmerge.go).
+	MarkedAt *time.Time `json:"marked_at,omitempty"`
 }
 
 // hasLastGood reports whether e carries usage from a successful fetch.
@@ -160,16 +164,17 @@ func indexByName(list []CacheAccount) map[string]CacheAccount {
 }
 
 // WriteCache writes the usage snapshot (dir 0700, file 0600) under the cache
-// lock, merged with the fetch state other processes recorded.
+// lock, merged with the fetch state and limit marks other processes recorded.
 func WriteCache(p paths.Paths, rows []Row, c usage.Combined, now time.Time) error {
 	return updateCache(p, func(old Cache) Cache {
 		next := buildCache(rows, c, now)
 		prev := indexByName(old.Accounts)
 		for i, a := range next.Accounts {
 			if o, ok := prev[a.Name]; ok {
-				next.Accounts[i] = carryFetchState(a, o)
+				next.Accounts[i] = mergeSnapshot(a, o, now)
 			}
 		}
+		next.Accounts = append(next.Accounts, markedLeftovers(next.Accounts, old.Accounts, now)...)
 		return next
 	})
 }

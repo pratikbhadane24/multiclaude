@@ -21,15 +21,16 @@ const (
 
 // MarkLimitedType records, under the cache lock, that the named account hit the
 // limit of kind limitType (Claude Code's rateLimitType) until resetsAt. Other
-// entries and the account's fetch state are kept; a later successful usage
-// fetch overwrites the mark with real numbers.
+// entries and the account's fetch state are kept; only a successful usage
+// fetch started after the mark overwrites it with real numbers.
 func MarkLimitedType(p paths.Paths, name, limitType string, resetsAt time.Time) error {
+	at := time.Now()
 	return updateCache(p, func(old Cache) Cache {
 		e, ok := indexByName(old.Accounts)[name]
 		if !ok {
 			e = CacheAccount{Name: name}
 		}
-		return withEntry(old, limitedEntry(e, limitType, resetsAt.UTC()))
+		return withEntry(old, stampMark(limitedEntry(e, limitType, resetsAt.UTC()), at))
 	})
 }
 

@@ -46,20 +46,21 @@ type LimitMark struct {
 // MarkLimited records m in the usage cache under the cache lock: the hit
 // window becomes fully used and the state limited, for the account and every
 // cached entry of the same login. Other fields and fetch state are kept, so
-// the next real fetch replaces the mark with fresh data.
+// only a fetch started after the mark replaces it with fresh data.
 func MarkLimited(p paths.Paths, m LimitMark) error {
+	at := time.Now()
 	return updateCache(p, func(old Cache) Cache {
 		next := old
 		next.Accounts = make([]CacheAccount, 0, len(old.Accounts)+1)
 		target, found := indexByName(old.Accounts)[m.Name]
 		for _, a := range old.Accounts {
 			if a.Name == m.Name || (found && sameCachedLogin(a, target)) {
-				a = markedEntry(a, m)
+				a = stampMark(markedEntry(a, m), at)
 			}
 			next.Accounts = append(next.Accounts, a)
 		}
 		if !found {
-			next.Accounts = append(next.Accounts, markedEntry(CacheAccount{Name: m.Name}, m))
+			next.Accounts = append(next.Accounts, stampMark(markedEntry(CacheAccount{Name: m.Name}, m), at))
 		}
 		return next
 	})

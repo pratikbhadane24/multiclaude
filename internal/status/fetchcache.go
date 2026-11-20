@@ -60,20 +60,27 @@ func (c *CachedFetch) setErr(err error) {
 }
 
 // Fetch returns a's usage, from the cache when it is recent or the account is
-// backing off, else from the API (recording the outcome).
+// backing off, else from the API (recording the outcome). The written entry
+// is built under the cache lock from the entry current at write time, so a
+// limit mark landing during the request survives (see mergeFetch).
 func (c *CachedFetch) Fetch(ctx context.Context, a registry.Account) usage.AccountUsage {
-	now := c.now()
+	started := c.now()
 	prev, has := c.load(a.Name)
-	if has && c.servable(prev, now) {
-		return fromCacheEntry(prev, now)
+	if has && c.servable(prev, started) {
+		return fromCacheEntry(prev, started)
 	}
 	res := c.fetch(ctx, a)
-	next := nextCacheEntry(prev, a.Name, res, now)
-	if err := updateCache(c.paths, func(old Cache) Cache { return withEntry(old, next) }); err != nil {
+	var next CacheAccount
+	err := updateCache(c.paths, func(old Cache) Cache {
+		next = mergeFetch(indexByName(old.Accounts)[a.Name], a.Name, res, started)
+		return withEntry(old, next)
+	})
+	if err != nil {
 		c.setErr(err)
+		next = mergeFetch(prev, a.Name, res, started)
 	}
-	if res.State == usage.StateAPIError {
-		return fromCacheEntry(next, now)
+	if res.State == usage.StateAPIError || markActive(next, started) {
+		return fromCacheEntry(next, started)
 	}
 	return res
 }
