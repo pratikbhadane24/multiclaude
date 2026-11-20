@@ -32,6 +32,12 @@ type Deps struct {
 	Stderr  io.Writer
 	Inspect func(p paths.Paths, dir string) ([]links.Item, error)
 	Self    func() (string, error) // os.Executable in prod; nil skips that check
+	// Supervise, when set, may run claude as a supervised child instead of
+	// exec'ing it (SDK auto-switch). ok false means "not applicable: exec".
+	// prepare readies another account's directory before a child starts.
+	Supervise func(args, env []string, prepare func(dir string)) (code int, ok bool)
+	// Exit ends the process with a supervised run's exit code.
+	Exit func(code int)
 }
 
 // Main runs the shim. args excludes the program name; env is passed to the
@@ -43,6 +49,13 @@ func Main(args []string, env []string, deps Deps) error {
 	}
 	if err := checkNotSelf(p, deps.Self); err != nil {
 		return err
+	}
+	if deps.Supervise != nil && deps.Exit != nil {
+		prepare := func(dir string) { prepareAccount(p, dir, deps) }
+		if code, ok := deps.Supervise(args, env, prepare); ok {
+			deps.Exit(code)
+			return nil
+		}
 	}
 	argv := append([]string{claudeArgv0}, args...)
 	if err := deps.Exec(p.RealClaude, argv, env); err != nil {

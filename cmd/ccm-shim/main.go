@@ -10,6 +10,7 @@ import (
 
 	"multiclaude/internal/links"
 	"multiclaude/internal/paths"
+	"multiclaude/internal/sdkproxy"
 	"multiclaude/internal/shim"
 )
 
@@ -22,12 +23,15 @@ func main() {
 		fmt.Fprintf(os.Stderr, "ccm: cannot start claude: home dir: %v\n", err)
 		os.Exit(exitCannotStart)
 	}
+	p := paths.Resolve(os.Getenv, home)
 	deps := shim.Deps{
-		Paths:   paths.Resolve(os.Getenv, home),
-		Exec:    syscall.Exec,
-		Stderr:  os.Stderr,
-		Inspect: links.Inspect,
-		Self:    os.Executable,
+		Paths:     p,
+		Exec:      syscall.Exec,
+		Stderr:    os.Stderr,
+		Inspect:   links.Inspect,
+		Self:      os.Executable,
+		Supervise: sdkproxy.Supervisor(p, os.Stderr),
+		Exit:      os.Exit,
 	}
 	err = shim.Main(os.Args[1:], os.Environ(), deps)
 	if err == nil {
