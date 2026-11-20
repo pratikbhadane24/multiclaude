@@ -192,6 +192,9 @@ func TestRejectedEventThenOtherErrorDoesNotSwitch(t *testing.T) {
 	startTurn(t, h, c)
 	c.say(t, rejected(t0.Add(time.Hour), "five_hour"))
 	c.say(t, assistErr("server_error", "ECONNRESET"))
+	if got := h.out(); got != rejected(t0.Add(time.Hour), "five_hour")+"\n" {
+		t.Fatalf("held event not flushed first, sdk got %q", got)
+	}
 	if got := h.out(); !strings.Contains(got, "ECONNRESET") {
 		t.Fatalf("sdk got %q", got)
 	}
@@ -200,6 +203,46 @@ func TestRejectedEventThenOtherErrorDoesNotSwitch(t *testing.T) {
 		t.Fatalf("sdk got %q", got)
 	}
 	h.noChild()
+}
+
+func TestRejectedThenAllowedEventDoesNotSwitch(t *testing.T) {
+	h := newHarness(t)
+	c := h.run(streamArgs, workEnv, nil)
+	startTurn(t, h, c)
+	ev := rejected(t0.Add(time.Hour), "five_hour")
+	allowed := `{"type":"rate_limit_event","rate_limit_info":{"status":"allowed_warning"},"session_id":"S1"}`
+	c.say(t, ev)
+	c.say(t, allowed)
+	for _, want := range []string{ev, allowed} {
+		if got := h.out(); got != want+"\n" {
+			t.Fatalf("sdk got %q, want %q", got, want)
+		}
+	}
+	c.say(t, resultOK)
+	if got := h.out(); got != resultOK+"\n" {
+		t.Fatalf("sdk got %q", got)
+	}
+	h.noChild()
+}
+
+func TestCredentialEnvIsStripped(t *testing.T) {
+	h := newHarness(t)
+	env := append([]string{"ANTHROPIC_API_KEY=k", "CLAUDE_CODE_OAUTH_TOKEN=t", "ANTHROPIC_AUTH_TOKEN=a"}, workEnv...)
+	c := h.run(streamArgs, env, nil)
+	for _, k := range credentialEnv {
+		if _, has := c.envValue(k); has {
+			t.Fatalf("%s passed to child: %q", k, c.env)
+		}
+	}
+	if n := strings.Count(h.stderr.String(), "ignored"); n != 1 {
+		t.Fatalf("stderr %q", h.stderr.String())
+	}
+	startTurn(t, h, c)
+	c.say(t, errResult(limitText))
+	c2 := expectReplacement(t, h, "", "switched from work to main")
+	if _, has := c2.envValue("ANTHROPIC_API_KEY"); has {
+		t.Fatalf("replacement env %q", c2.env)
+	}
 }
 
 func TestRejectedEventThenSuccessSwitchesWithoutPrompt(t *testing.T) {

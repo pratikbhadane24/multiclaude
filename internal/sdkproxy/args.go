@@ -15,7 +15,7 @@ const (
 // child drops them all and resumes the proxied session instead. The bool
 // says whether the flag takes a value.
 var sessionFlags = map[string]bool{
-	"--resume": true, "-r": true, "--session-id": true,
+	"--resume": true, "-r": true, "--session-id": true, "--resume-session-at": true,
 	"--continue": false, "-c": false, "--fork-session": false,
 }
 
@@ -59,8 +59,8 @@ func Enabled(args, env []string, autoSwitch bool) bool {
 }
 
 // ResumeArgs returns a copy of args that resumes sessionID: every existing
-// --resume/-r/--session-id/--continue/-c/--fork-session is dropped and
-// "--resume <sessionID>" appended. args is not modified.
+// --resume/-r/--session-id/--resume-session-at/--continue/-c/--fork-session
+// is dropped and "--resume <sessionID>" appended. args is not modified.
 func ResumeArgs(args []string, sessionID string) []string {
 	out := make([]string, 0, len(args)+2)
 	for i := 0; i < len(args); i++ {

@@ -1,11 +1,17 @@
 package sdkproxy
 
 import (
+	"strings"
+
 	"multiclaude/internal/paths"
 	"multiclaude/internal/registry"
 )
 
 const configDirEnv = "CLAUDE_CONFIG_DIR"
+
+// credentialEnv override the account's stored login; a child running with
+// any of them would keep the same credentials after a switch.
+var credentialEnv = []string{"CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"}
 
 // currentAccount maps the env's CLAUDE_CONFIG_DIR to a registered account:
 // unset or ~/.claude is main. ok is false for a directory ccm does not know.
@@ -37,4 +43,26 @@ func envFor(env []string, a registry.Account) []string {
 		return out
 	}
 	return append(out, configDirEnv+"="+a.Dir)
+}
+
+// withoutCredentials returns a copy of env without credentialEnv and the
+// names of those it removed. env is not modified.
+func withoutCredentials(env []string) ([]string, []string) {
+	out, removed := append([]string(nil), env...), []string(nil)
+	for _, k := range credentialEnv {
+		if hasEnvKey(out, k) {
+			removed = append(removed, k)
+			out = withoutEnv(out, k)
+		}
+	}
+	return out, removed
+}
+
+func hasEnvKey(env []string, key string) bool {
+	for _, kv := range env {
+		if strings.HasPrefix(kv, key+"=") {
+			return true
+		}
+	}
+	return false
 }

@@ -98,33 +98,40 @@ func (s *session) onChildExit(code int) (int, bool) {
 
 // onLimit reacts to a usage limit: record it, then stop the child so the
 // session can continue elsewhere. limitLine is the withheld line that
-// reported it (nil when the turn already finished normally).
+// reported it (nil when the turn already finished normally); cutOff says
+// the oldest outstanding turn did not finish.
 func (s *session) onLimit(limitLine []byte, cutOff bool) {
-	now := s.d.Clock.Now()
-	lim := limitFrom(s.armInfo, now)
-	withheld := append(s.held, limitLine)
-	s.armed, s.armInfo, s.held = false, rateLimitInfo{}, nil
-	if s.acctKnown {
-		s.avoid[s.acct.Name] = lim.ResetsAt.Add(status.ResetGrace)
-		if err := s.d.MarkLimited(s.acct.Name, lim); err != nil {
-			s.logf("cannot record %s as limited: %v", s.acct.Name, err)
-		}
+	lim := limitFrom(s.armInfo, s.d.Clock.Now())
+	withheld := append([][]byte(nil), s.held...)
+	if limitLine != nil {
+		withheld = append(withheld, limitLine)
 	}
+	s.armed, s.armInfo, s.held = false, rateLimitInfo{}, nil
+	s.recordLimit(lim)
 	if s.switches >= maxSwitches {
-		s.logf("%s limited — %d switches already, not switching again", s.accountName(), maxSwitches)
+		s.logf("%s limited — %d switches already, not switching again for this turn", s.accountName(), maxSwitches)
 		s.gaveUp = true
-		for _, l := range withheld {
-			if l != nil {
-				s.emit(l)
-			}
-		}
+		s.emitWithheld(withheld)
 		return
 	}
-	if !cutOff {
-		s.inFlight = nil
+	s.cutOff, s.withheld = cutOff, nil
+	if cutOff {
+		s.withheld = withheld
 	}
 	s.limitedFrom = s.accountName()
 	s.stop()
+}
+
+// recordLimit avoids the current account until its reset and marks it
+// limited in the shared cache.
+func (s *session) recordLimit(lim Limit) {
+	if !s.acctKnown {
+		return
+	}
+	s.avoid[s.acct.Name] = lim.ResetsAt.Add(status.ResetGrace)
+	if err := s.d.MarkLimited(s.acct.Name, lim); err != nil {
+		s.logf("cannot record %s as limited: %v", s.acct.Name, err)
+	}
 }
 
 // stop terminates the current child: EOF on stdin, SIGTERM, then SIGKILL
@@ -145,20 +152,41 @@ func (s *session) stop() {
 
 // resume continues the session on the best free account, or waits.
 func (s *session) resume() (int, bool) {
-	if s.stdinClosed && s.inFlight == nil && len(s.pending) == 0 {
+	if s.stdinClosed && !s.hasQueuedTurns() {
 		return 0, true
 	}
 	now := s.d.Clock.Now()
 	choice := status.PickSwitch(s.accounts(), s.cache(), s.avoid, now)
 	if !choice.Found {
 		s.wait(choice.WaitUntil, now)
-		return 0, false
+		return s.answerQueuedInterrupts()
 	}
-	if gap := s.lastSwitch.Add(minSwitchGap).Sub(now); s.switches > 0 && gap > 0 {
+	if gap := s.lastSwitch.Add(minSwitchGap).Sub(now); !s.lastSwitch.IsZero() && gap > 0 {
 		s.phase, s.timer = phaseWaiting, s.d.Clock.After(gap)
-		return 0, false
+		return s.answerQueuedInterrupts()
 	}
 	return s.switchTo(choice.Account, now)
+}
+
+// answerQueuedInterrupts answers the interrupts that arrived while the
+// limited child was stopping, now that the session waits without a child.
+func (s *session) answerQueuedInterrupts() (int, bool) {
+	var rest [][]byte
+	var interrupts []message
+	for _, l := range s.pending {
+		if m, ok := isInterrupt(l); ok {
+			interrupts = append(interrupts, m)
+		} else {
+			rest = append(rest, l)
+		}
+	}
+	s.pending = rest
+	for _, m := range interrupts {
+		if code, done := s.interruptWaiting(m); done {
+			return code, true
+		}
+	}
+	return 0, false
 }
 
 func (s *session) wait(until *time.Time, now time.Time) {
@@ -166,6 +194,7 @@ func (s *session) wait(until *time.Time, now time.Time) {
 	if until != nil && until.Sub(now) > 0 && until.Sub(now) < d {
 		d = until.Sub(now)
 	}
+	s.waitedReset = true
 	if !s.waitLogged {
 		s.waitLogged = true
 		if until != nil {
@@ -184,7 +213,12 @@ func (s *session) onTimer() (int, bool) {
 	return s.resume()
 }
 
+// switchTo starts the session on a. A switch after waiting for a reset
+// starts a new chain of switches.
 func (s *session) switchTo(a registry.Account, now time.Time) (int, bool) {
+	if s.waitedReset {
+		s.switches, s.waitedReset = 0, false
+	}
 	s.switches++
 	s.lastSwitch, s.waitLogged = now, false
 	from := s.limitedFrom
