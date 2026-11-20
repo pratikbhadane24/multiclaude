@@ -26,7 +26,7 @@ func TestNoFreeAccountWaitsForResetThenSwitches(t *testing.T) {
 	h.waitTimer(pollInterval)
 	h.noChild()
 	h.noOut()
-	queued := `{"type":"control_request","request_id":"r9","request":{"subtype":"interrupt"}}`
+	queued := `{"type":"control_request","request_id":"r9","request":{"subtype":"mcp_status"}}`
 	h.send(queued)
 	h.clock.Advance(pollInterval) // t0+60s: alt frees at reset+grace = t0+210s
 	h.waitTimer(pollInterval)
@@ -59,15 +59,53 @@ func TestWaitOnSameAccountUsesResetPrompt(t *testing.T) {
 	expectReplacement(t, h, "/acc/work", "The limit has now reset")
 }
 
-func TestStdinClosedWhileWaitingExits(t *testing.T) {
+func TestStdinClosedWhileWaitingDeliversThenExits(t *testing.T) {
 	h := newHarness(t)
 	h.accts = []registry.Account{{Name: "work", Dir: "/acc/work"}}
 	c := h.run(streamArgs, workEnv, nil)
 	startTurn(t, h, c)
+	c.say(t, rejected(t0.Add(30*time.Second), "five_hour"))
 	c.say(t, errResult(limitText))
 	h.waitTimer(pollInterval)
 	_ = h.sdkIn.Close()
-	if code := h.exitCode(); code != exitAbandoned {
+	select {
+	case code := <-h.done:
+		t.Fatalf("exited %d with a turn still queued", code)
+	case <-time.After(50 * time.Millisecond):
+	}
+	h.clock.Advance(pollInterval)
+	h.waitTimer(30 * time.Second)
+	h.clock.Advance(30 * time.Second)
+	c2 := expectReplacement(t, h, "/acc/work", "The limit has now reset")
+	select {
+	case _, ok := <-c2.in:
+		if ok {
+			t.Fatal("unexpected line")
+		}
+	case <-time.After(waitLimit):
+		t.Fatal("replacement stdin not closed")
+	}
+	c2.say(t, resultOK)
+	if got := h.out(); got != resultOK+"\n" {
+		t.Fatalf("sdk got %q", got)
+	}
+	c2.exit(0)
+	if code := h.exitCode(); code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+}
+
+func TestStdinClosedWhileWaitingWithNothingQueuedExits(t *testing.T) {
+	h := newHarness(t)
+	h.accts = []registry.Account{{Name: "work", Dir: "/acc/work"}}
+	c := h.run(streamArgs, workEnv, nil)
+	startTurn(t, h, c)
+	c.say(t, rejected(t0.Add(time.Hour), "five_hour"))
+	c.say(t, resultOK)
+	h.out()
+	h.waitTimer(pollInterval)
+	_ = h.sdkIn.Close()
+	if code := h.exitCode(); code != 0 {
 		t.Fatalf("exit %d", code)
 	}
 }
@@ -115,5 +153,35 @@ func TestGivesUpAfterMaxSwitches(t *testing.T) {
 	h.noChild()
 	if !strings.Contains(h.stderr.String(), "not switching again") {
 		t.Fatalf("stderr %q", h.stderr.String())
+	}
+	// Giving up lasts for that turn only: the next one may switch again.
+	h.send(userLine)
+	c.read(t)
+	c.say(t, ev)
+	c.say(t, errResult(limitText))
+	h.waitTimer(minSwitchGap)
+	h.clock.Advance(minSwitchGap)
+	expectReplacement(t, h, "/acc/work", "The limit has now reset")
+}
+
+func TestSwitchCounterResetsAfterSuccessfulTurn(t *testing.T) {
+	h := newHarness(t)
+	h.accts = []registry.Account{{Name: "work", Dir: "/acc/work"}}
+	c := h.run(streamArgs, workEnv, nil)
+	startTurn(t, h, c)
+	ev := rejected(t0.Add(-time.Hour), "five_hour")
+	for i := 0; i < maxSwitches+2; i++ {
+		if i > 0 {
+			h.send(userLine)
+			c.read(t)
+		}
+		h.clock.Advance(minSwitchGap)
+		c.say(t, ev)
+		c.say(t, errResult(limitText))
+		c = expectReplacement(t, h, "/acc/work", "The limit has now reset")
+		c.say(t, resultOK)
+		if got := h.out(); got != resultOK+"\n" {
+			t.Fatalf("switch %d: sdk got %q", i, got)
+		}
 	}
 }

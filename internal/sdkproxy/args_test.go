@@ -50,6 +50,8 @@ func TestResumeArgsReplacesSessionFlags(t *testing.T) {
 		{[]string{"--resume=old", "-r", "x", "--model", "m"}, []string{"--model", "m", "--resume", "S"}},
 		{[]string{"--session-id", "u", "--continue", "--fork-session", "-c"}, []string{"--resume", "S"}},
 		{[]string{"--resume", "--verbose"}, []string{"--verbose", "--resume", "S"}},
+		{[]string{"--resume", "old", "--resume-session-at", "m-1", "--verbose"}, []string{"--verbose", "--resume", "S"}},
+		{[]string{"--resume-session-at=m-1", "--model", "m"}, []string{"--model", "m", "--resume", "S"}},
 	}
 	for _, c := range cases {
 		in := append([]string(nil), c.in...)

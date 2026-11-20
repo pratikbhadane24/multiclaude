@@ -4,18 +4,21 @@
 // anything but a slow turn.
 //
 // Traffic is proxied line by line, verbatim. The proxy remembers the SDK's
-// state-setting control requests (initialize, set_model, ...) and the
-// in-flight user message. On a limit it marks the account limited in the
-// shared usage cache, picks the freest account from that cache, terminates
-// the child and starts a new one as the chosen account with
-// "--resume <session id>", replays the remembered requests (swallowing the
-// new child's answers to them) and the in-flight message, so the turn reruns.
+// state-setting control requests (initialize, set_model, ...), the control
+// requests and user messages the child has not answered yet. On a limit it
+// marks the account limited in the shared usage cache, picks the freest
+// account from that cache, terminates the child and starts a new one as the
+// chosen account with "--resume <session id>", replays the remembered state
+// (swallowing answers the SDK already had), sends a resume prompt for the
+// cut-off turn and re-sends everything still unanswered, so the session
+// carries on.
 package sdkproxy
 
 import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"syscall"
 	"time"
 
@@ -32,9 +35,7 @@ const (
 	killDelay       = 5 * time.Second
 	pollInterval    = time.Minute
 	exitCannotStart = 127
-	// exitAbandoned: the SDK closed stdin while a turn waited for a free account.
-	exitAbandoned  = 1
-	signalExitBase = 128
+	signalExitBase  = 128
 )
 
 // Deps are the proxy's side effects, injectable for tests.
@@ -61,6 +62,7 @@ const (
 	phaseRunning  phase = iota // a child is serving the session
 	phaseStopping              // the limited child is being terminated
 	phaseWaiting               // no child: waiting for an account to free up
+	phaseIdle                  // no child and nothing to deliver: the next SDK line starts one
 )
 
 // session is the proxy state. It is owned by the loop goroutine; other
@@ -82,10 +84,11 @@ type session struct {
 	child  *running
 
 	sessionID    string
-	inFlight     []byte // the SDK user line whose turn has not finished
-	lastUser     []byte // the latest SDK user line (shape for the resume prompt)
+	outstanding  [][]byte // user lines sent to the child with no result yet, oldest first
+	lastUser     []byte   // the latest SDK user line (shape for the resume prompt)
 	replay       map[string][]byte
-	pending      [][]byte
+	ctrl         *ctrlTracker // control requests sent to the child, not answered yet
+	pending      [][]byte     // SDK lines received while no child runs
 	swallow      map[string]bool
 	suppressInit bool
 	swallowEcho  int
@@ -94,21 +97,26 @@ type session struct {
 	armed       bool
 	armInfo     rateLimitInfo
 	held        [][]byte
+	cutOff      bool     // the oldest outstanding turn was cut off by the limit
+	withheld    [][]byte // the cut-off turn's limit lines, kept until it resumes or is interrupted
 	avoid       map[string]time.Time
 	switches    int
 	lastSwitch  time.Time
 	gaveUp      bool
 	waitLogged  bool
+	waitedReset bool
 	limitedFrom string
 }
 
 // Run proxies one SDK session through supervised claude children and
 // returns the exit code to leave with. args excludes the program name.
 func Run(args, env []string, d Deps) int {
+	env = stripCredentials(env, d.Stderr)
 	s := &session{
 		d: d, args: args, env: env, baseEnv: env,
 		events: make(chan event), quit: make(chan struct{}),
 		replay: map[string][]byte{}, swallow: map[string]bool{}, avoid: map[string]time.Time{},
+		ctrl: newCtrlTracker(),
 	}
 	defer close(s.quit)
 	s.chooseStart()
@@ -152,7 +160,7 @@ func (s *session) handle(e event) (int, bool) {
 		if ev.eof {
 			return s.onStdinEOF()
 		}
-		s.onStdinLine(ev.line)
+		return s.onStdinLine(ev.line)
 	case evOut:
 		if ev.gen == s.gen {
 			s.onChildLine(ev.line)
@@ -198,4 +206,15 @@ func (s *session) accountName() string {
 		return s.acct.Name
 	}
 	return s.acct.Dir
+}
+
+// stripCredentials drops credential variables from the child env so the
+// account directory's login is what claude uses, and switching accounts
+// really switches credentials. It says so once on stderr.
+func stripCredentials(env []string, stderr io.Writer) []string {
+	out, removed := withoutCredentials(env)
+	if len(removed) > 0 && stderr != nil {
+		_, _ = fmt.Fprintf(stderr, logPrefix+"auto-switch: ignored %s (each account uses its own login)\n", strings.Join(removed, ", "))
+	}
+	return out
 }
