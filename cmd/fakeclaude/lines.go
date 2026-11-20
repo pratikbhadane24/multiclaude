@@ -25,7 +25,12 @@ func newUUID() string {
 
 // slug converts a working directory into claude's project directory name.
 func slug(cwd string) string {
-	return strings.NewReplacer("/", "-", ".", "-").Replace(cwd)
+	return strings.Map(func(r rune) rune {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' {
+			return r
+		}
+		return '-'
+	}, cwd)
 }
 
 // transcriptPath is <configDir or home/.claude>/projects/<slug(cwd)>/<id>.jsonl.

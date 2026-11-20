@@ -70,6 +70,9 @@ open(os.path.join(root, "cache", "usage.json"), "w").write(json.dumps({
 open(os.path.join(root, "config.json"), "w").write(json.dumps({"autoSwitch": True}, indent=2))
 PY
 
+# Keep a pristine cache: scenario 1 correctly marks the first account limited.
+cp "$ROOT/cache/usage.json" "$TMP/usage.pristine.json"
+
 # --- hermetic environment ----------------------------------------------------
 export HOME="$FAKE_HOME"
 if [ "$(cd "$HOME" && pwd -P)" = "$REAL_HOME" ]; then echo "refusing: HOME is the real home" >&2; exit 2; fi
@@ -154,6 +157,7 @@ s=0; check_switch interactive || s=$?
 report "interactive auto-switch" "$s"
 
 # --- scenario 2: stream-json via the shim ----------------------------------------
+cp "$TMP/usage.pristine.json" "$ROOT/cache/usage.json"
 : > "$LOG"
 echo "== scenario 2: stream-json (ccm-shim, CLAUDE_CONFIG_DIR=${ACCTS[0]})"
 INIT='{"type":"control_request","request_id":"req_1","request":{"subtype":"initialize"}}'

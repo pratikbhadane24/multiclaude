@@ -13,9 +13,9 @@ import (
 
 var fixedNow = func() time.Time { return time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC) }
 
-func TestSlugReplacesSlashAndDot(t *testing.T) {
-	got := slug("/Users/a.b/Work/my.proj")
-	if want := "-Users-a-b-Work-my-proj"; got != want {
+func TestSlugReplacesEveryNonAlphanumeric(t *testing.T) {
+	got := slug("/Users/a.b/Work/my_proj x")
+	if want := "-Users-a-b-Work-my-proj-x"; got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}
 }
