@@ -24,7 +24,14 @@ import (
 type cliProc struct {
 	done chan int
 	once sync.Once
+	pid  int
 }
+
+// Pid is the fake process id (fakePid(i) for the i-th start).
+func (p *cliProc) Pid() int { return p.pid }
+
+// fakePid is the pid of the i-th fake claude start.
+func fakePid(i int) int { return 4200 + i }
 
 func (p *cliProc) exit(code int) { p.once.Do(func() { p.done <- code }) }
 func (p *cliProc) Wait() int     { return <-p.done }
@@ -52,7 +59,7 @@ func (r *procRecorder) start(bin string, args, env []string) (autoswitch.Proc, e
 	c := procCall{bin, slices.Clone(args), env}
 	r.calls = append(r.calls, c)
 	r.mu.Unlock()
-	p := &cliProc{done: make(chan int, 1)}
+	p := &cliProc{done: make(chan int, 1), pid: fakePid(i)}
 	if r.onStart != nil {
 		r.onStart(i, c, p)
 	} else {

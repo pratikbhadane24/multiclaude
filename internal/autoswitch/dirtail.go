@@ -15,11 +15,10 @@ const (
 )
 
 // DirTail follows the conversation of one claude run inside its project
-// directory. It starts on <id>.jsonl and moves to the newest top-level
-// transcript written since launch when one is newer (/clear or /resume
-// inside claude start or pick another file), so limits are seen in whichever
-// conversation claude is in. Subagent transcripts (<id>/subagents/) and files
-// not named like a session id are ignored.
+// directory. It starts on <id>.jsonl and moves only to the conversation the
+// owner reports (/clear or /resume inside claude start or pick another file).
+// The directory is shared by every account and terminal, so other files in
+// it are never followed: another claude's limit is not this claude's.
 type DirTail struct {
 	dir       string
 	since     time.Time
@@ -31,17 +30,20 @@ type DirTail struct {
 	tails    map[string]*Tail
 	cur      string
 	tail     *Tail
+	owner    Owner
 }
 
 // NewDirTail snapshots dir and starts following session id from the current
-// end of its transcript (or its start once it appears).
-func NewDirTail(dir, id string, since time.Time) *DirTail {
+// end of its transcript (or its start once it appears). owner (may be nil)
+// names the conversation claude moved to.
+func NewDirTail(dir, id string, since time.Time, owner Owner) *DirTail {
 	d := &DirTail{
 		dir:       dir,
 		since:     since.Truncate(time.Millisecond),
 		scanEvery: DefaultDirScan,
 		atLaunch:  transcriptSizes(dir),
 		tails:     map[string]*Tail{},
+		owner:     owner,
 	}
 	d.switchTo(id)
 	return d
@@ -89,19 +91,19 @@ func (d *DirTail) switchTo(id string) {
 	d.cur, d.tail = id, t
 }
 
-// refresh switches to the newest transcript written since launch when it is
-// newer than the current one; true when it switched.
+// refresh switches to the conversation the owner reports when it changed;
+// true when it switched.
 func (d *DirTail) refresh() bool {
+	if d.owner == nil {
+		return false
+	}
 	now := time.Now()
 	if now.Sub(d.lastScan) < d.scanEvery {
 		return false
 	}
 	d.lastScan = now
-	id, mtime, ok := newestSince(d.dir, d.since)
+	id, ok := d.owner()
 	if !ok || id == d.cur {
-		return false
-	}
-	if fi, err := os.Stat(d.tail.path); err == nil && !mtime.After(fi.ModTime()) {
 		return false
 	}
 	d.switchTo(id)
@@ -129,17 +131,4 @@ func transcriptSizes(dir string) map[string]int64 {
 	out := map[string]int64{}
 	sessionFiles(dir, func(id string, fi os.FileInfo) { out[id] = fi.Size() })
 	return out
-}
-
-// newestSince is the transcript with the latest mtime not before since.
-func newestSince(dir string, since time.Time) (string, time.Time, bool) {
-	var best string
-	var bestAt time.Time
-	sessionFiles(dir, func(id string, fi os.FileInfo) {
-		at := fi.ModTime()
-		if !at.Before(since) && (best == "" || at.After(bestAt)) {
-			best, bestAt = id, at
-		}
-	})
-	return best, bestAt, best != ""
 }

@@ -82,6 +82,9 @@ func (a *App) autoSwitchDeps(cfg config.Config, cwd string, env []string) autosw
 	d.RelaunchArgs = func(acct registry.Account, id, prompt string) []string {
 		return autoswitch.RelaunchArgs(config.MergedArgs(cfg, acct.Name, nil), id, prompt)
 	}
+	d.SessionOf = func(acct registry.Account, pid int) (string, bool) {
+		return autoswitch.SessionOfPid(handoff.ConfigDir(a.Paths, acct), pid)
+	}
 	d.Start = func(acct registry.Account, args []string) (autoswitch.Proc, error) {
 		return a.startProc(auth.Binary(a.Paths), args, auth.Env(acct, env))
 	}

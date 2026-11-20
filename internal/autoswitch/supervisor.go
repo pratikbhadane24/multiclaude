@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -57,9 +58,13 @@ type Deps struct {
 	// ProjectDir is the project transcript directory seen by acct.
 	ProjectDir func(acct registry.Account) string
 	// Tail snapshots dir and starts following session id from its current
-	// end (synchronously); limits carry the session they were seen in.
-	Tail func(dir, id string) Follower
-	Pick func(exclude []string, now time.Time) (registry.Account, bool)
+	// end (synchronously), moving to whatever conversation owner reports;
+	// limits carry the session they were seen in.
+	Tail func(dir, id string, owner Owner) Follower
+	// SessionOf is the conversation claude process pid (running as acct)
+	// is in; nil or false when unknown.
+	SessionOf func(acct registry.Account, pid int) (string, bool)
+	Pick      func(exclude []string, now time.Time) (registry.Account, bool)
 	// NextReset is the account usable soonest and when.
 	NextReset func(now time.Time) (registry.Account, time.Time, bool)
 	// Mark records that acct hit l.
@@ -73,8 +78,8 @@ type Deps struct {
 // caller sets Start, RelaunchArgs, ProjectDir and Err.
 func NewDeps(p paths.Paths) Deps {
 	return Deps{
-		Tail: func(dir, id string) Follower {
-			t := NewDirTail(dir, id, time.Now())
+		Tail: func(dir, id string, owner Owner) Follower {
+			t := NewDirTail(dir, id, time.Now(), owner)
 			return func(ctx context.Context, onLimit func(Limit)) { t.Follow(ctx, DefaultPoll, onLimit) }
 		},
 		Pick:      func(ex []string, now time.Time) (registry.Account, bool) { return PickNext(p, ex, now) },
@@ -151,11 +156,20 @@ func Run(ctx context.Context, d Deps, first registry.Account, args []string, id 
 
 // runOnce runs claude once while tailing its transcript.
 func (s *supervisor) runOnce(acct registry.Account, args []string) (outcome, error) {
-	follow := s.d.Tail(s.d.ProjectDir(acct), s.id)
+	var pid atomic.Int64
+	owner := func() (string, bool) {
+		n := pid.Load()
+		if n == 0 || s.d.SessionOf == nil {
+			return "", false
+		}
+		return s.d.SessionOf(acct, int(n))
+	}
+	follow := s.d.Tail(s.d.ProjectDir(acct), s.id, owner)
 	proc, err := s.d.Start(acct, args)
 	if err != nil {
 		return outcome{}, err
 	}
+	pid.Store(int64(pidOf(proc)))
 	ctx, cancel := context.WithCancel(context.Background())
 	limits := make(chan Limit, 1)
 	watchDone := make(chan struct{})

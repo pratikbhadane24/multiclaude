@@ -118,7 +118,7 @@ func (h *harness) start(a registry.Account, args []string) (Proc, error) {
 }
 
 // tail emits one limit when the run about to start is scripted to hit one.
-func (h *harness) tail(_, id string) Follower {
+func (h *harness) tail(_, id string, _ Owner) Follower {
 	i := len(h.launches)
 	h.tailed = append(h.tailed, id)
 	return func(ctx context.Context, onLimit func(Limit)) {

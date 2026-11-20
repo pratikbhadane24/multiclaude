@@ -134,6 +134,9 @@ func (p *osProc) childWriter(w io.Writer) (*os.File, func()) {
 // Wait waits for the child, continuing it after each stop (once jobs lets
 // it), then restores the terminal and returns the exit code (128+signal when
 // killed by a signal).
+// Pid is claude's process id.
+func (p *osProc) Pid() int { return p.pid }
+
 func (p *osProc) Wait() int {
 	code := p.waitExit()
 	p.jobs.Done()
