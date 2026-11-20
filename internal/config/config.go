@@ -27,8 +27,10 @@ type AccountConfig struct {
 
 // Config is the on-disk ccm configuration.
 type Config struct {
-	DefaultArgs []string                 `json:"defaultArgs,omitempty"`
-	Accounts    map[string]AccountConfig `json:"accounts,omitempty"`
+	DefaultArgs      []string                 `json:"defaultArgs,omitempty"`
+	Accounts         map[string]AccountConfig `json:"accounts,omitempty"`
+	AutoSwitch       bool                     `json:"autoSwitch,omitempty"`
+	AutoSwitchPrompt string                   `json:"autoSwitchPrompt,omitempty"`
 }
 
 func filePath(p paths.Paths) string { return filepath.Join(p.AccountsRoot, fileName) }

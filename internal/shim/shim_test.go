@@ -224,3 +224,41 @@ func TestMainReturnsExecError(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestMainSupervisedRunExitsWithItsCodeAndSkipsExec(t *testing.T) {
+	f := newFixture(t)
+	acc := filepath.Join(f.p.AccountsRoot, "alt")
+	if err := os.MkdirAll(acc, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(f.p.ClaudeJSON, []byte(`{"mcpServers":{"a":{}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	d := f.deps()
+	exited := -1
+	d.Exit = func(code int) { exited = code }
+	d.Supervise = func(args, env []string, prepare func(string)) (int, bool) {
+		prepare(acc) // a switch target gets the same MCP sync as a launch
+		return 7, true
+	}
+	if err := Main([]string{"x"}, nil, d); err != nil {
+		t.Fatal(err)
+	}
+	if exited != 7 || len(f.calls) != 0 {
+		t.Fatalf("exit %d, exec calls %d", exited, len(f.calls))
+	}
+	if _, err := os.Stat(filepath.Join(acc, ".claude.json")); err != nil {
+		t.Fatalf("prepare did not sync: %v", err)
+	}
+}
+
+func TestMainUnsupervisedFallsBackToExec(t *testing.T) {
+	f := newFixture(t)
+	d := f.deps()
+	d.Exit = func(int) { t.Fatal("exit called") }
+	d.Supervise = func([]string, []string, func(string)) (int, bool) { return 0, false }
+	if err := Main([]string{"x"}, nil, d); err != nil {
+		t.Fatal(err)
+	}
+	f.assertExec(t, []string{"x"}, nil)
+}

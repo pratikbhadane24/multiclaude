@@ -137,6 +137,16 @@ ccm t3-sync     # one claude-<account> instance per account, with your default a
 t3 up           # T3's own remote service, for using it from your phone
 ```
 
+### Auto-switch for T3 / SDK sessions
+
+With `autoSwitch` on in `~/.claude-accounts/config.json` (`"autoSwitch": true`), the shim supervises SDK sessions (claude started with `--output-format stream-json --input-format stream-json`, which is how T3 runs it) instead of exec'ing claude. When the account hits its usage limit mid-turn, the session moves to another account by itself:
+
+- **Detected by** a `rate_limit_event` with status `rejected` (not `allowed_warning`, not while running on extra usage), or an error result / `rate_limit` assistant error reading "You've hit your … limit" or "Request rejected (429)". Network, billing and auth errors are passed through untouched.
+- **Then** the account is marked limited in the shared usage cache (with its reset time), the freest account is chosen **from the cache only** (no network; logged-out, limited and duplicate logins skipped), and claude is restarted as that account with `--resume <session>`. The SDK's setup requests are replayed (their answers hidden), and instead of resending your message (the transcript already has it) the new child gets a short "[ccm] … resume where you left off, check what was already done first" prompt. Customize it with `"autoSwitchPrompt"` in the config.
+- **No account free:** the turn waits (checking every minute) until the soonest reset + 1 minute, then continues — on the same account if that is the first one free.
+- **Guards:** at most 10 switches per session process, never two within 30 s; after 10 the limit error is shown as usual. stderr gets one line per switch: `ccm: work limited — continuing on main`.
+- **Opt out** for one run with `CCM_NO_PROXY=1`. Everything else (terminal `claude`, `-p`, plain `--output-format json`) still execs claude directly.
+
 ## Doctor
 
 ```sh
