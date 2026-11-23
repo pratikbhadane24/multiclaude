@@ -48,3 +48,16 @@ func ShellInit(shell, accountsRoot string) (string, error) {
 	}
 	return guard + "\n" + ccmFunc, nil
 }
+
+// ShellInitWorker returns ShellInit plus a claude function that runs the
+// ccm shim. On workers Orca installs its own claude wrapper unless the user
+// defines one, and macOS path_helper can push the shim dir behind other
+// claude binaries, so the function makes the shim win in every pane.
+func ShellInitWorker(shell, accountsRoot string) (string, error) {
+	base, err := ShellInit(shell, accountsRoot)
+	if err != nil {
+		return "", err
+	}
+	fn := fmt.Sprintf("claude() { command %s \"$@\"; }\n", quote(accountsRoot+"/bin/claude"))
+	return base + fn, nil
+}

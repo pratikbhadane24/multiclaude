@@ -84,3 +84,32 @@ func TestShellInitZshSyntax(t *testing.T) {
 		}
 	}
 }
+
+func TestShellInitWorkerDefinesClaudeFunction(t *testing.T) {
+	out, err := ShellInitWorker("zsh", "/Users/u/.claude-accounts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, `claude() { command '/Users/u/.claude-accounts/bin/claude' "$@"; }`) {
+		t.Fatalf("no claude function in:\n%s", out)
+	}
+	zsh, err := exec.LookPath("zsh")
+	if err != nil {
+		t.Skip("zsh not installed")
+	}
+	cmd := exec.Command(zsh, "-f", "-c", `eval "$(cat)"; typeset -f claude >/dev/null`)
+	cmd.Stdin = strings.NewReader(out)
+	if b, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("zsh: %v\n%s", err, b)
+	}
+}
+
+func TestShellInitHubHasNoClaudeFunction(t *testing.T) {
+	out, err := ShellInit("zsh", "/Users/u/.claude-accounts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out, "claude()") {
+		t.Fatalf("hub init defines claude():\n%s", out)
+	}
+}

@@ -45,7 +45,7 @@ func Sync(p paths.Paths, accountDir string) (bool, error) {
 	if err := checkTarget(p, dir); err != nil {
 		return false, err
 	}
-	mainServers, err := readMainServers(p.ClaudeJSON)
+	mainServers, err := readMainServers(SourcePath(p))
 	if err != nil {
 		return false, err
 	}

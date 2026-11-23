@@ -8,11 +8,17 @@ import (
 
 // cmdShellInit prints the shell integration snippet.
 func (a *App) cmdShellInit(_ context.Context, args []string) int {
-	pos, code, ok := a.parseArgs(a.newFlags("shell-init"), args, 1, "shell-init zsh")
+	fs := a.newFlags("shell-init")
+	worker := fs.Bool("worker", false, "also define claude() to run the ccm shim (workers)")
+	pos, code, ok := a.parseArgs(fs, args, 1, "shell-init zsh [--worker]")
 	if !ok {
 		return code
 	}
-	script, err := shellenv.ShellInit(pos[0], a.Paths.AccountsRoot)
+	build := shellenv.ShellInit
+	if *worker {
+		build = shellenv.ShellInitWorker
+	}
+	script, err := build(pos[0], a.Paths.AccountsRoot)
 	if err != nil {
 		return a.errorf("%v", err)
 	}
