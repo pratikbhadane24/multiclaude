@@ -27,4 +27,5 @@ jobs:
           VERSION: ${{ github.ref_name }}
         run: |
           gh release create "$VERSION" dist/*.tar.gz dist/checksums.txt \
-            --title "$VERSION" --generate-notes --verify-tag
+            --title "$VERSION" --verify-tag \
+            --notes-file .github/release-notes.md --generate-notes
