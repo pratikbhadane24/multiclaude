@@ -10,6 +10,7 @@ import (
 	"io"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/pratikbhadane24/multiclaude/internal/links"
 	"github.com/pratikbhadane24/multiclaude/internal/mcp"
@@ -44,6 +45,7 @@ type Deps struct {
 // real claude unchanged. It returns only if exec fails or is refused.
 func Main(args []string, env []string, deps Deps) error {
 	p := deps.Paths
+	env = safeAutoPick(p, env, deps.Stderr)
 	if dir, ok := accountDir(env, p); ok {
 		prepareAccount(p, dir, deps)
 	}
@@ -62,6 +64,19 @@ func Main(args []string, env []string, deps Deps) error {
 		return fmt.Errorf("exec %s: %w", p.RealClaude, err)
 	}
 	return nil
+}
+
+// safeAutoPick applies AutoPick; a panic keeps env unchanged so launching
+// is never blocked.
+func safeAutoPick(p paths.Paths, env []string, stderr io.Writer) (out []string) {
+	out = env
+	defer func() {
+		if r := recover(); r != nil {
+			warn(stderr, "account auto-pick skipped: %v", r)
+			out = env
+		}
+	}()
+	return AutoPick(p, env, time.Now())
 }
 
 // accountDir returns the normalized CLAUDE_CONFIG_DIR when it names a

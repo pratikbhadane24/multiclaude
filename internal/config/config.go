@@ -34,7 +34,13 @@ type Config struct {
 	AutoSwitch bool `json:"autoSwitch,omitempty"`
 	// AutoSwitchPrompt, when set, replaces the built-in resume prompt.
 	AutoSwitchPrompt string `json:"autoSwitchPrompt,omitempty"`
+	// DefaultAccount "best" makes the shim pick the account with the most
+	// headroom when no CLAUDE_CONFIG_DIR is set (used on workers).
+	DefaultAccount string `json:"defaultAccount,omitempty"`
 }
+
+// DefaultAccountBest is the DefaultAccount value that enables auto-pick.
+const DefaultAccountBest = "best"
 
 func filePath(p paths.Paths) string { return filepath.Join(p.AccountsRoot, fileName) }
 
