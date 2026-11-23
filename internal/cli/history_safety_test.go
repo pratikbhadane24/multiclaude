@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
 )
 
 func TestAddMigratesExistingHistoryIntoMain(t *testing.T) {

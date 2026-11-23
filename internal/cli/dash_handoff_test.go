@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"multiclaude/internal/config"
+	"github.com/pratikbhadane24/multiclaude/internal/config"
 )
 
 func TestDashLatestSessionMatchesContinueLookup(t *testing.T) {

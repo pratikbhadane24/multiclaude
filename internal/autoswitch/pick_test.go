@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"multiclaude/internal/paths"
-	"multiclaude/internal/registry"
-	"multiclaude/internal/status"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/status"
 )
 
 var pickNow = time.Date(2026, 11, 20, 9, 0, 0, 0, time.UTC)

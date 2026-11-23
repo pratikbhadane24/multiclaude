@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"multiclaude/internal/run"
+	"github.com/pratikbhadane24/multiclaude/internal/run"
 )
 
 // sameLoginEnv has main and work both logged in as workEmail.

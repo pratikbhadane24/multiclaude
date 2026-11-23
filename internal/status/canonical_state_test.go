@@ -3,7 +3,7 @@ package status
 import (
 	"testing"
 
-	"multiclaude/internal/usage"
+	"github.com/pratikbhadane24/multiclaude/internal/usage"
 )
 
 func TestPickBestReturnsHealthyDuplicateOfErroredAccount(t *testing.T) {

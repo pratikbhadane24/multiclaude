@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
 )
 
 func TestAddRefusesMainsEmailExit2(t *testing.T) {

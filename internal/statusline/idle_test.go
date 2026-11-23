@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"multiclaude/internal/status"
+	"github.com/pratikbhadane24/multiclaude/internal/status"
 )
 
 func renderWith(t *testing.T, accts ...status.CacheAccount) string {

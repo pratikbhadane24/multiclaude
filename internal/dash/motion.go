@@ -5,7 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"multiclaude/internal/status"
+	"github.com/pratikbhadane24/multiclaude/internal/status"
 )
 
 const (

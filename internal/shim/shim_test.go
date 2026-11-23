@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"multiclaude/internal/links"
-	"multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/links"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
 )
 
 type execCall struct {

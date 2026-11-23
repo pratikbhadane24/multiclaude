@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
 )
 
 // quote wraps s in POSIX single quotes, escaping embedded single quotes.

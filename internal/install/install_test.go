@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
 )
 
 type env struct {
@@ -148,7 +148,7 @@ func TestMissingShim(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err := Install(e.p, e.exe, e.localBin)
-	want := "ccm-shim not found next to " + filepath.Dir(e.exe) + "; run make build"
+	want := "ccm-shim not found next to " + filepath.Dir(e.exe) + "; reinstall ccm or run make build"
 	if err == nil || err.Error() != want {
 		t.Fatalf("err = %v, want %q", err, want)
 	}

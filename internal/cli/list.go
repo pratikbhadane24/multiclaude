@@ -7,8 +7,8 @@ import (
 	"sync"
 	"text/tabwriter"
 
-	"multiclaude/internal/auth"
-	"multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/auth"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
 )
 
 const listPad = 2

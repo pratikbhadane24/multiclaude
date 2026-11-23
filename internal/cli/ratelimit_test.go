@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	dashboard "multiclaude/internal/dash"
-	"multiclaude/internal/status"
+	dashboard "github.com/pratikbhadane24/multiclaude/internal/dash"
+	"github.com/pratikbhadane24/multiclaude/internal/status"
 )
 
 // withClock makes the app's clock a settable variable.

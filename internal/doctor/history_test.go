@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"multiclaude/internal/history"
-	"multiclaude/internal/links"
-	"multiclaude/internal/paths"
-	"multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/history"
+	"github.com/pratikbhadane24/multiclaude/internal/links"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
 )
 
 func TestFixReplacedHistoryItemMergesInsteadOfBackup(t *testing.T) {

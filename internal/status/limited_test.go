@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"multiclaude/internal/usage"
+	"github.com/pratikbhadane24/multiclaude/internal/usage"
 )
 
 func TestRenderOpusSonnetColumnsAndLimited(t *testing.T) {

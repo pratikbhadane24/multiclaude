@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"multiclaude/internal/keychain"
-	"multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/keychain"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
 )
 
 func loadAccts(t *testing.T, e *cliEnv) []registry.Account {

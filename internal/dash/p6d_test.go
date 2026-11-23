@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"multiclaude/internal/registry"
-	"multiclaude/internal/status"
-	"multiclaude/internal/usage"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/status"
+	"github.com/pratikbhadane24/multiclaude/internal/usage"
 )
 
 func okRow(name, email string, five, seven *float64) status.Row {

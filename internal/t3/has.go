@@ -3,8 +3,8 @@ package t3
 import (
 	"slices"
 
-	"multiclaude/internal/paths"
-	"multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
 )
 
 // HasInstance reports whether T3's settings already hold an instance for a

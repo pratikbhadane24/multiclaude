@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
-	"multiclaude/internal/consts"
-	"multiclaude/internal/keychain"
-	"multiclaude/internal/registry"
-	"multiclaude/internal/run"
+	"github.com/pratikbhadane24/multiclaude/internal/consts"
+	"github.com/pratikbhadane24/multiclaude/internal/keychain"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/run"
 )
 
 const (

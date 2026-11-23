@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"multiclaude/internal/paths"
-	"multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
 )
 
 func t3Paths(t *testing.T) paths.Paths {

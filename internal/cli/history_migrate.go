@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"time"
 
-	"multiclaude/internal/consts"
-	"multiclaude/internal/history"
-	"multiclaude/internal/paths"
-	"multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/consts"
+	"github.com/pratikbhadane24/multiclaude/internal/history"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
 )
 
 // nowOrReal is the app clock, or time.Now when unset.

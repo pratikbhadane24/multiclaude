@@ -3,8 +3,8 @@ package sdkproxy
 import (
 	"strings"
 
-	"multiclaude/internal/paths"
-	"multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
 )
 
 const configDirEnv = "CLAUDE_CONFIG_DIR"

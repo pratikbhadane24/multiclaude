@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
 )
 
 func TestSyncHTMLCharsDoNotCauseRewriteEveryLaunch(t *testing.T) {

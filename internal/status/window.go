@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"multiclaude/internal/usage"
+	"github.com/pratikbhadane24/multiclaude/internal/usage"
 )
 
 const (

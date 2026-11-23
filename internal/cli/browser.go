@@ -1,8 +1,8 @@
 package cli
 
 import (
-	"multiclaude/internal/browser"
-	"multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/browser"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
 )
 
 // SetBrowser stores how login links are presented for the named account.

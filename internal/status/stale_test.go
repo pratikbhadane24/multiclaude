@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"multiclaude/internal/usage"
+	"github.com/pratikbhadane24/multiclaude/internal/usage"
 )
 
 func staleRow(five float64) Row {

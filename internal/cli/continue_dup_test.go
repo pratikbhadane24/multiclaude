@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"multiclaude/internal/handoff"
+	"github.com/pratikbhadane24/multiclaude/internal/handoff"
 )
 
 // dupContinueEnv has main and work signed in as the same login, with a

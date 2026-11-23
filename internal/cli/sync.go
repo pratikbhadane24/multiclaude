@@ -4,9 +4,9 @@ import (
 	"context"
 	"strings"
 
-	"multiclaude/internal/links"
-	"multiclaude/internal/mcp"
-	"multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/links"
+	"github.com/pratikbhadane24/multiclaude/internal/mcp"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
 )
 
 // cmdSync links shared config and syncs MCP servers into every account.

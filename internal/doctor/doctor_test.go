@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"multiclaude/internal/links"
-	"multiclaude/internal/paths"
-	"multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/links"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
 )
 
 type fakeInfo struct {

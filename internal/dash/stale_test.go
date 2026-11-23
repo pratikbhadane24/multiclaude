@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"multiclaude/internal/status"
-	"multiclaude/internal/usage"
+	"github.com/pratikbhadane24/multiclaude/internal/status"
+	"github.com/pratikbhadane24/multiclaude/internal/usage"
 )
 
 func staleDashRow(five float64) status.Row {

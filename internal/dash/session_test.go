@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"multiclaude/internal/handoff"
+	"github.com/pratikbhadane24/multiclaude/internal/handoff"
 )
 
 const testSessionID = "11111111-2222-4333-8444-555555555555"

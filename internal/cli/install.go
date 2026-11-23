@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"multiclaude/internal/install"
+	"github.com/pratikbhadane24/multiclaude/internal/install"
 )
 
 // localBinDir is where the ccm symlink goes, relative to the home dir.

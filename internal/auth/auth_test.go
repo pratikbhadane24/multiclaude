@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"multiclaude/internal/paths"
-	"multiclaude/internal/registry"
-	"multiclaude/internal/run"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/run"
 )
 
 func TestEnvMainDropsConfigDir(t *testing.T) {

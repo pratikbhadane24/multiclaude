@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"multiclaude/internal/auth"
-	"multiclaude/internal/browser"
-	"multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/auth"
+	"github.com/pratikbhadane24/multiclaude/internal/browser"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
 )
 
 const allFlag = "--all"

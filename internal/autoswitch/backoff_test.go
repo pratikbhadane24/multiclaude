@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
 )
 
 // longWaits drops the signal-grace waits, leaving switch gaps and reset waits.

@@ -8,10 +8,10 @@ import (
 	"os"
 	"syscall"
 
-	"multiclaude/internal/links"
-	"multiclaude/internal/paths"
-	"multiclaude/internal/sdkproxy"
-	"multiclaude/internal/shim"
+	"github.com/pratikbhadane24/multiclaude/internal/links"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/sdkproxy"
+	"github.com/pratikbhadane24/multiclaude/internal/shim"
 )
 
 // exitCannotStart is the shell's "command not found" status.

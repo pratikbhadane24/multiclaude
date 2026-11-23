@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"multiclaude/internal/config"
-	"multiclaude/internal/run"
+	"github.com/pratikbhadane24/multiclaude/internal/config"
+	"github.com/pratikbhadane24/multiclaude/internal/run"
 )
 
 func (e *cliEnv) setConfig(t *testing.T, c config.Config) {

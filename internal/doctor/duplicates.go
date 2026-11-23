@@ -3,7 +3,7 @@ package doctor
 import (
 	"context"
 
-	"multiclaude/internal/usage"
+	"github.com/pratikbhadane24/multiclaude/internal/usage"
 )
 
 const duplicateCheckName = "duplicate login"

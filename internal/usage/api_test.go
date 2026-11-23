@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"multiclaude/internal/registry"
-	"multiclaude/internal/run"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/run"
 )
 
 const testToken = "sk-secret-token"

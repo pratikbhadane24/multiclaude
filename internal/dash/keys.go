@@ -6,7 +6,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
 )
 
 const noAccountText = "no account yet — press a to add one"

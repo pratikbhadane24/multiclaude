@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"multiclaude/internal/config"
+	"github.com/pratikbhadane24/multiclaude/internal/config"
 )
 
 func (e *cliEnv) t3Settings(t *testing.T) string {

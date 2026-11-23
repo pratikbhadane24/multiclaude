@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"multiclaude/internal/run"
+	"github.com/pratikbhadane24/multiclaude/internal/run"
 )
 
 func TestHostAllowedEdgeCases(t *testing.T) {

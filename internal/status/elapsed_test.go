@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"multiclaude/internal/usage"
+	"github.com/pratikbhadane24/multiclaude/internal/usage"
 )
 
 // staleEntry is a cache entry whose last fetch failed, so its usage is kept

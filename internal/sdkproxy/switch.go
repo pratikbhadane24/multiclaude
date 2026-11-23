@@ -4,8 +4,8 @@ import (
 	"syscall"
 	"time"
 
-	"multiclaude/internal/registry"
-	"multiclaude/internal/status"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/status"
 )
 
 // accounts loads the registry; on failure only the current account is known.

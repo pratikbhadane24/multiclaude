@@ -6,8 +6,8 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"multiclaude/internal/tokens"
-	"multiclaude/internal/usage"
+	"github.com/pratikbhadane24/multiclaude/internal/tokens"
+	"github.com/pratikbhadane24/multiclaude/internal/usage"
 )
 
 const (

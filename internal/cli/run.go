@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"multiclaude/internal/registry"
-	"multiclaude/internal/status"
-	"multiclaude/internal/usage"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/status"
+	"github.com/pratikbhadane24/multiclaude/internal/usage"
 )
 
 // exitAllLimited is returned by `best` when no account has headroom.

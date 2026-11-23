@@ -3,7 +3,7 @@ package cli
 import (
 	"testing"
 
-	"multiclaude/internal/consts"
+	"github.com/pratikbhadane24/multiclaude/internal/consts"
 )
 
 func TestEveryCommandNameIsReserved(t *testing.T) {

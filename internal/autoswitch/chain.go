@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"multiclaude/internal/registry"
-	"multiclaude/internal/status"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/status"
 )
 
 // afterLimit handles a limit hit on from: it records the limit and returns

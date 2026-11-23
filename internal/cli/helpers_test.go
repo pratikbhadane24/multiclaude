@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"multiclaude/internal/auth"
-	"multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/auth"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
 )
 
 func TestParseInterspersedStopsAtDoubleDash(t *testing.T) {

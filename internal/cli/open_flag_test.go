@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"multiclaude/internal/registry"
-	"multiclaude/internal/run"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/run"
 )
 
 // ctxRunner records whether the context handed to the login call is cancellable.

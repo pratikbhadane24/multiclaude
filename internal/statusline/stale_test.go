@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"multiclaude/internal/status"
+	"github.com/pratikbhadane24/multiclaude/internal/status"
 )
 
 func TestRenderCacheYoungerThanMinFetchIntervalDoesNotSpawn(t *testing.T) {

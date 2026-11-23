@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"multiclaude/internal/paths"
-	"multiclaude/internal/registry"
-	"multiclaude/internal/run"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/run"
 )
 
 const signInLine = "Sign in as you@x.com in the browser. If it's signed in to another Claude account, open the printed URL in a private window."

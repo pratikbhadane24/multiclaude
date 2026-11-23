@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"multiclaude/internal/config"
-	"multiclaude/internal/handoff"
-	"multiclaude/internal/status"
+	"github.com/pratikbhadane24/multiclaude/internal/config"
+	"github.com/pratikbhadane24/multiclaude/internal/handoff"
+	"github.com/pratikbhadane24/multiclaude/internal/status"
 )
 
 var credentialKeys = []string{"CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"}

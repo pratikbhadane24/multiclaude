@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"multiclaude/internal/fsutil"
-	"multiclaude/internal/paths"
-	"multiclaude/internal/usage"
+	"github.com/pratikbhadane24/multiclaude/internal/fsutil"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/usage"
 )
 
 const (

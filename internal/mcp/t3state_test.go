@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
 )
 
 func t3StatePaths(t *testing.T) paths.Paths {

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
 )
 
 const (

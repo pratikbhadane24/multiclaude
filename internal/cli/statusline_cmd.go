@@ -8,10 +8,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"multiclaude/internal/fsutil"
-	"multiclaude/internal/status"
-	"multiclaude/internal/statusline"
-	"multiclaude/internal/usage"
+	"github.com/pratikbhadane24/multiclaude/internal/fsutil"
+	"github.com/pratikbhadane24/multiclaude/internal/status"
+	"github.com/pratikbhadane24/multiclaude/internal/statusline"
+	"github.com/pratikbhadane24/multiclaude/internal/usage"
 )
 
 const (

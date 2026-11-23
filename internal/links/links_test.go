@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
 )
 
 func setup(t *testing.T) (paths.Paths, string) {

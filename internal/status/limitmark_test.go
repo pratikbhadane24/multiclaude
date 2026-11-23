@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"multiclaude/internal/paths"
-	"multiclaude/internal/usage"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/usage"
 )
 
 func markPaths(t *testing.T) paths.Paths {

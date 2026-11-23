@@ -8,8 +8,8 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"multiclaude/internal/doctor"
-	"multiclaude/internal/status"
+	"github.com/pratikbhadane24/multiclaude/internal/doctor"
+	"github.com/pratikbhadane24/multiclaude/internal/status"
 )
 
 type mode int

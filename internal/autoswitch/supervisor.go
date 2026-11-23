@@ -9,10 +9,10 @@ import (
 	"syscall"
 	"time"
 
-	"multiclaude/internal/handoff"
-	"multiclaude/internal/paths"
-	"multiclaude/internal/registry"
-	"multiclaude/internal/status"
+	"github.com/pratikbhadane24/multiclaude/internal/handoff"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/status"
 )
 
 const (

@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"multiclaude/internal/config"
+	"github.com/pratikbhadane24/multiclaude/internal/config"
 )
 
 const configUsage = "config show | set default-args <args...> | set args <account> <args...> | set auto-switch on|off | " +

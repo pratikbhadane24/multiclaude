@@ -3,7 +3,7 @@ package mcp
 import (
 	"path/filepath"
 
-	"multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
 )
 
 // Drift reports whether Sync would change accountDir's MCP servers. It is

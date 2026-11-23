@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"multiclaude/internal/links"
-	"multiclaude/internal/paths"
-	"multiclaude/internal/registry"
-	"multiclaude/internal/tokens"
-	"multiclaude/internal/usage"
+	"github.com/pratikbhadane24/multiclaude/internal/links"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/tokens"
+	"github.com/pratikbhadane24/multiclaude/internal/usage"
 )
 
 var now = time.Date(2026, 11, 19, 12, 0, 0, 0, time.UTC)

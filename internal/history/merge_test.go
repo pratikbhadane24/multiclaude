@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
 )
 
 var now = time.Unix(1700000000, 0)

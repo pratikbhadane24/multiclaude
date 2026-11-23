@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"multiclaude/internal/paths"
-	"multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
 )
 
 func switchAccts(names ...string) []registry.Account {

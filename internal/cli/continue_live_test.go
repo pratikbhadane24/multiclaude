@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"multiclaude/internal/handoff"
-	"multiclaude/internal/run"
+	"github.com/pratikbhadane24/multiclaude/internal/handoff"
+	"github.com/pratikbhadane24/multiclaude/internal/run"
 )
 
 // markLive records sessionID as running in the test process (always alive).

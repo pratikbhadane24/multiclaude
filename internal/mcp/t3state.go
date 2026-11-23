@@ -6,7 +6,7 @@ import (
 	"maps"
 	"path/filepath"
 
-	"multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
 )
 
 const t3LaunchArgsKey = "t3LaunchArgs"

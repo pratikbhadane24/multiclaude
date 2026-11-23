@@ -5,7 +5,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
 )
 
 func TestRefreshCacheSkipsEmailLookupsAndTodayScan(t *testing.T) {

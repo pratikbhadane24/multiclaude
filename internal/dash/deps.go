@@ -9,11 +9,11 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"multiclaude/internal/doctor"
-	"multiclaude/internal/registry"
-	"multiclaude/internal/status"
-	"multiclaude/internal/tokens"
-	"multiclaude/internal/usage"
+	"github.com/pratikbhadane24/multiclaude/internal/doctor"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/status"
+	"github.com/pratikbhadane24/multiclaude/internal/tokens"
+	"github.com/pratikbhadane24/multiclaude/internal/usage"
 )
 
 // DefaultInterval is the auto-refresh period.

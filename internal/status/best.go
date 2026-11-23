@@ -1,6 +1,6 @@
 package status
 
-import "multiclaude/internal/usage"
+import "github.com/pratikbhadane24/multiclaude/internal/usage"
 
 const fullPct = 100.0
 

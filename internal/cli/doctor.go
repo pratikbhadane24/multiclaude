@@ -6,12 +6,12 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"multiclaude/internal/doctor"
-	"multiclaude/internal/keychain"
-	"multiclaude/internal/links"
-	"multiclaude/internal/mcp"
-	"multiclaude/internal/registry"
-	"multiclaude/internal/t3"
+	"github.com/pratikbhadane24/multiclaude/internal/doctor"
+	"github.com/pratikbhadane24/multiclaude/internal/keychain"
+	"github.com/pratikbhadane24/multiclaude/internal/links"
+	"github.com/pratikbhadane24/multiclaude/internal/mcp"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/t3"
 )
 
 // cmdDoctor handles `ccm doctor [--fix]`.

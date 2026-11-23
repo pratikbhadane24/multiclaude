@@ -3,7 +3,7 @@ package cli
 import (
 	"context"
 
-	"multiclaude/internal/shellenv"
+	"github.com/pratikbhadane24/multiclaude/internal/shellenv"
 )
 
 // cmdUse prints the shell snippet that activates an account.

@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"multiclaude/internal/consts"
-	"multiclaude/internal/history"
-	"multiclaude/internal/links"
-	"multiclaude/internal/paths"
-	"multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/consts"
+	"github.com/pratikbhadane24/multiclaude/internal/history"
+	"github.com/pratikbhadane24/multiclaude/internal/links"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
 )
 
 // Status is the outcome of one check.

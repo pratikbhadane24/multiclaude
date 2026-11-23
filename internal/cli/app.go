@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"multiclaude/internal/autoswitch"
-	"multiclaude/internal/paths"
-	"multiclaude/internal/run"
+	"github.com/pratikbhadane24/multiclaude/internal/autoswitch"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/run"
 )
 
 // Exit codes.

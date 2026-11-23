@@ -1,4 +1,4 @@
-module multiclaude
+module github.com/pratikbhadane24/multiclaude
 
 go 1.27
 

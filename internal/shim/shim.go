@@ -11,9 +11,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"multiclaude/internal/links"
-	"multiclaude/internal/mcp"
-	"multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/links"
+	"github.com/pratikbhadane24/multiclaude/internal/mcp"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
 )
 
 const (

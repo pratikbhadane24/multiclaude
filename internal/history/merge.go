@@ -17,8 +17,8 @@ import (
 	"syscall"
 	"time"
 
-	"multiclaude/internal/consts"
-	"multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/consts"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
 )
 
 const (

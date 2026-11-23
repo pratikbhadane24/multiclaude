@@ -10,7 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
-	"multiclaude/internal/status"
+	"github.com/pratikbhadane24/multiclaude/internal/status"
 )
 
 const (

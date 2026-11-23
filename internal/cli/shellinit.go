@@ -3,7 +3,7 @@ package cli
 import (
 	"context"
 
-	"multiclaude/internal/shellenv"
+	"github.com/pratikbhadane24/multiclaude/internal/shellenv"
 )
 
 // cmdShellInit prints the shell integration snippet.

@@ -7,11 +7,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"multiclaude/internal/auth"
-	"multiclaude/internal/browser"
-	"multiclaude/internal/links"
-	"multiclaude/internal/mcp"
-	"multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/auth"
+	"github.com/pratikbhadane24/multiclaude/internal/browser"
+	"github.com/pratikbhadane24/multiclaude/internal/links"
+	"github.com/pratikbhadane24/multiclaude/internal/mcp"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
 )
 
 const accountDirMode = 0o700

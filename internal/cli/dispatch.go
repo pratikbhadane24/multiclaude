@@ -6,7 +6,7 @@ import (
 	"flag"
 	"fmt"
 
-	"multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
 )
 
 // ExitUsage is returned for unknown commands and bad arguments (EX_USAGE).
@@ -41,6 +41,7 @@ Commands:
   remove <name> [--purge]       unregister an account (--purge deletes its data)
   shell-init zsh                print shell integration for ~/.zshrc
   install                       install the shim and the ccm link
+  version                       print the ccm version
   help                          show this help
 
 Login link (--open copy|incognito|chrome:<Profile dir>):
@@ -84,6 +85,9 @@ func (a *App) Main(ctx context.Context, args []string) int {
 	switch args[0] {
 	case "help", "-h", "--help":
 		fmt.Fprint(a.Out, usageText)
+		return ExitOK
+	case "version", "--version", "-v":
+		fmt.Fprintf(a.Out, "ccm %s\n", versionString())
 		return ExitOK
 	}
 	if h, ok := commands[args[0]]; ok {
@@ -179,6 +183,7 @@ func (a *App) findAccount(name string) (registry.Account, int, bool) {
 var interruptFree = map[string]bool{
 	"list": true, "use": true, "sync": true, "t3-sync": true, "doctor": true,
 	"shell-init": true, "install": true, "config": true, "help": true, "-h": true, "--help": true,
+	"version": true, "--version": true, "-v": true,
 }
 
 // HandlesInterrupt reports whether the command wants SIGINT delivered as a

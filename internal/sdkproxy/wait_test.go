@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"multiclaude/internal/registry"
-	"multiclaude/internal/status"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/status"
 )
 
 func limitedCache(name string, reset time.Time) status.Cache {

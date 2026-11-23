@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"multiclaude/internal/status"
+	"github.com/pratikbhadane24/multiclaude/internal/status"
 )
 
 const cavemanSettings = `{

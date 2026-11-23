@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	"multiclaude/internal/config"
-	"multiclaude/internal/mcp"
-	"multiclaude/internal/registry"
-	"multiclaude/internal/t3"
+	"github.com/pratikbhadane24/multiclaude/internal/config"
+	"github.com/pratikbhadane24/multiclaude/internal/mcp"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/t3"
 )
 
 // cmdT3Sync adds or updates a T3 Code instance for every account and keeps

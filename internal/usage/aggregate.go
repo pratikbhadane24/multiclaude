@@ -3,7 +3,7 @@ package usage
 import (
 	"time"
 
-	"multiclaude/internal/tokens"
+	"github.com/pratikbhadane24/multiclaude/internal/tokens"
 )
 
 const fullPct = 100.0

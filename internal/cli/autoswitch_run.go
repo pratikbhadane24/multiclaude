@@ -7,11 +7,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"multiclaude/internal/auth"
-	"multiclaude/internal/autoswitch"
-	"multiclaude/internal/config"
-	"multiclaude/internal/handoff"
-	"multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/auth"
+	"github.com/pratikbhadane24/multiclaude/internal/autoswitch"
+	"github.com/pratikbhadane24/multiclaude/internal/config"
+	"github.com/pratikbhadane24/multiclaude/internal/handoff"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
 )
 
 // startProc starts claude for the auto-switch supervisor (a fake in tests).

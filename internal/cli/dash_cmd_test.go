@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"multiclaude/internal/config"
-	dashboard "multiclaude/internal/dash"
-	"multiclaude/internal/doctor"
-	"multiclaude/internal/run"
-	"multiclaude/internal/status"
+	"github.com/pratikbhadane24/multiclaude/internal/config"
+	dashboard "github.com/pratikbhadane24/multiclaude/internal/dash"
+	"github.com/pratikbhadane24/multiclaude/internal/doctor"
+	"github.com/pratikbhadane24/multiclaude/internal/run"
+	"github.com/pratikbhadane24/multiclaude/internal/status"
 )
 
 func envValue(env []string, key string) (string, bool) {

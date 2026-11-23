@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"multiclaude/internal/paths"
-	"multiclaude/internal/usage"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/usage"
 )
 
 // CachedUsage returns the cached usage of each named account, in order,

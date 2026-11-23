@@ -4,9 +4,9 @@ import (
 	"strings"
 	"time"
 
-	"multiclaude/internal/doctor"
-	"multiclaude/internal/registry"
-	"multiclaude/internal/status"
+	"github.com/pratikbhadane24/multiclaude/internal/doctor"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/status"
 )
 
 const argsConfigError = "launch args: config error — run ccm config show"

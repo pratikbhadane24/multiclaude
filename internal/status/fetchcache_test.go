@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"multiclaude/internal/paths"
-	"multiclaude/internal/registry"
-	"multiclaude/internal/usage"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/usage"
 )
 
 // fakeAPI is an injected usage fetch whose next answer the test sets.

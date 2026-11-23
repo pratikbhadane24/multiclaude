@@ -9,9 +9,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"multiclaude/internal/registry"
-	"multiclaude/internal/status"
-	"multiclaude/internal/usage"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/status"
+	"github.com/pratikbhadane24/multiclaude/internal/usage"
 )
 
 // limitedMainSnapshot is main at 100% of its 5h window (resets in 47m) and

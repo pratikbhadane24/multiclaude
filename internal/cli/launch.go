@@ -5,9 +5,9 @@ import (
 	"os"
 	"os/exec"
 
-	"multiclaude/internal/auth"
-	"multiclaude/internal/config"
-	"multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/auth"
+	"github.com/pratikbhadane24/multiclaude/internal/config"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
 )
 
 // launch is one interactive claude launch: binary, args (without argv[0]) and env.

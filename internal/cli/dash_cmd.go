@@ -14,11 +14,11 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/term"
 
-	"multiclaude/internal/config"
-	dashboard "multiclaude/internal/dash"
-	"multiclaude/internal/doctor"
-	"multiclaude/internal/registry"
-	"multiclaude/internal/status"
+	"github.com/pratikbhadane24/multiclaude/internal/config"
+	dashboard "github.com/pratikbhadane24/multiclaude/internal/dash"
+	"github.com/pratikbhadane24/multiclaude/internal/doctor"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/status"
 )
 
 // demoEnv, when "1", makes the dashboard show canned data (screenshots, smoke tests).

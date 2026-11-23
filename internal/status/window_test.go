@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"multiclaude/internal/registry"
-	"multiclaude/internal/usage"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/usage"
 )
 
 func TestWindowViewIdle(t *testing.T) {

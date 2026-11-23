@@ -6,7 +6,7 @@ import (
 	"maps"
 	"slices"
 
-	"multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
 )
 
 const keyLaunchArgs = "launchArgs"

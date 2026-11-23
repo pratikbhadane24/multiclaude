@@ -8,10 +8,10 @@ import (
 	"os"
 	"strings"
 
-	"multiclaude/internal/browser"
-	"multiclaude/internal/paths"
-	"multiclaude/internal/registry"
-	"multiclaude/internal/run"
+	"github.com/pratikbhadane24/multiclaude/internal/browser"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/run"
 )
 
 const configDirEnv = "CLAUDE_CONFIG_DIR"

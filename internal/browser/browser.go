@@ -10,7 +10,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"multiclaude/internal/run"
+	"github.com/pratikbhadane24/multiclaude/internal/run"
 )
 
 // Env contract between ccm login and the BROWSER shim invocation.

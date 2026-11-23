@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
 )
 
 func testPaths(t *testing.T) paths.Paths {

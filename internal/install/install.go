@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
 )
 
 const (
@@ -36,7 +36,7 @@ func Install(p paths.Paths, selfExe, localBin string) (Result, error) {
 	shimSrc := filepath.Join(dir, shimName)
 	data, err := os.ReadFile(shimSrc)
 	if errors.Is(err, os.ErrNotExist) {
-		return Result{}, fmt.Errorf("ccm-shim not found next to %s; run make build", dir)
+		return Result{}, fmt.Errorf("ccm-shim not found next to %s; reinstall ccm or run make build", dir)
 	}
 	if err != nil {
 		return Result{}, fmt.Errorf("read %s: %w", shimSrc, err)

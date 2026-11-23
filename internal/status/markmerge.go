@@ -3,7 +3,7 @@ package status
 import (
 	"time"
 
-	"multiclaude/internal/usage"
+	"github.com/pratikbhadane24/multiclaude/internal/usage"
 )
 
 // Limit-mark merge rules. A mark (MarkLimited/MarkLimitedType) stamps the

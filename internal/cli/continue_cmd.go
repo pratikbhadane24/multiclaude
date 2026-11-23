@@ -7,11 +7,11 @@ import (
 	"os"
 	"regexp"
 
-	"multiclaude/internal/consts"
-	"multiclaude/internal/handoff"
-	"multiclaude/internal/registry"
-	"multiclaude/internal/status"
-	"multiclaude/internal/usage"
+	"github.com/pratikbhadane24/multiclaude/internal/consts"
+	"github.com/pratikbhadane24/multiclaude/internal/handoff"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/status"
+	"github.com/pratikbhadane24/multiclaude/internal/usage"
 )
 
 // getwd is the working directory source; tests replace it.

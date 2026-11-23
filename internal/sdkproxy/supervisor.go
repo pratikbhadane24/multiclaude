@@ -7,10 +7,10 @@ import (
 	"os/signal"
 	"syscall"
 
-	"multiclaude/internal/config"
-	"multiclaude/internal/paths"
-	"multiclaude/internal/registry"
-	"multiclaude/internal/status"
+	"github.com/pratikbhadane24/multiclaude/internal/config"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/status"
 )
 
 // Supervisor returns the shim's hook: for an SDK stream-json invocation with

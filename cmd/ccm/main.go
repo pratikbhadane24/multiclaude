@@ -11,10 +11,10 @@ import (
 	"syscall"
 	"time"
 
-	"multiclaude/internal/browser"
-	"multiclaude/internal/cli"
-	"multiclaude/internal/paths"
-	"multiclaude/internal/run"
+	"github.com/pratikbhadane24/multiclaude/internal/browser"
+	"github.com/pratikbhadane24/multiclaude/internal/cli"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/run"
 )
 
 const httpTimeout = 10 * time.Second

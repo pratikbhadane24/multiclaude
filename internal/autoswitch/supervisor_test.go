@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/registry"
 )
 
 // fakeProc exits with code when Exit is called or when it receives exitOn.

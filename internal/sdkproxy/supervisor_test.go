@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"multiclaude/internal/config"
-	"multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/config"
+	"github.com/pratikbhadane24/multiclaude/internal/paths"
 )
 
 func TestSupervisorDeclinesWithoutStreamJSONOrAutoSwitch(t *testing.T) {

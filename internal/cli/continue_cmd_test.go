@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"multiclaude/internal/config"
-	"multiclaude/internal/handoff"
+	"github.com/pratikbhadane24/multiclaude/internal/config"
+	"github.com/pratikbhadane24/multiclaude/internal/handoff"
 )
 
 const continueCwd = "/Users/x/Work/proj"

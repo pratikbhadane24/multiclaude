@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"multiclaude/internal/autoswitch"
-	"multiclaude/internal/config"
-	dashboard "multiclaude/internal/dash"
-	"multiclaude/internal/handoff"
-	"multiclaude/internal/status"
+	"github.com/pratikbhadane24/multiclaude/internal/autoswitch"
+	"github.com/pratikbhadane24/multiclaude/internal/config"
+	dashboard "github.com/pratikbhadane24/multiclaude/internal/dash"
+	"github.com/pratikbhadane24/multiclaude/internal/handoff"
+	"github.com/pratikbhadane24/multiclaude/internal/status"
 )
 
 // cliProc is a fake claude: it exits at once with code, or (when it holds a
