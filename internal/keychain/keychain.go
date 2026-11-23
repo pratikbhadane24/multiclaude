@@ -1,4 +1,5 @@
-// Package keychain reads per-account Claude Code credentials from the macOS Keychain.
+// Package keychain reads per-account Claude Code credentials from the macOS
+// Keychain, or from Claude Code's .credentials.json fallback file.
 package keychain
 
 import (
@@ -62,7 +63,7 @@ type payload struct {
 const notFoundCode = 44
 
 // Present reports whether the account's keychain item exists without
-// reading the secret (no -w).
+// reading the secret (no -w), falling back to its credentials file.
 func Present(ctx context.Context, r run.Runner, a registry.Account) (bool, error) {
 	res, err := r.Run(ctx, securityBin, []string{"find-generic-password", "-s", Service(a.Dir)}, nil, false)
 	if err != nil {
@@ -72,13 +73,15 @@ func Present(ctx context.Context, r run.Runner, a registry.Account) (bool, error
 	case 0:
 		return true, nil
 	case notFoundCode:
-		return false, nil
+		c, err := fileCreds(a)
+		return c != nil, err
 	}
 	return false, fmt.Errorf("keychain: security exited %d", res.Code)
 }
 
-// Read fetches an account's credentials. It returns nil, nil when the
-// keychain entry is absent (security exits non-zero).
+// Read fetches an account's credentials from the Keychain, or, when the
+// Keychain has none (absent or locked, e.g. over SSH), from the account's
+// private .credentials.json. It returns nil, nil when neither has a login.
 func Read(ctx context.Context, r run.Runner, a registry.Account) (*Creds, error) {
 	args := []string{"find-generic-password", "-s", Service(a.Dir), "-w"}
 	res, err := r.Run(ctx, securityBin, args, nil, false)
@@ -86,10 +89,16 @@ func Read(ctx context.Context, r run.Runner, a registry.Account) (*Creds, error)
 		return nil, fmt.Errorf("keychain: run security: %w", err)
 	}
 	if res.Code != 0 {
-		return nil, nil
+		return fileCreds(a)
 	}
+	return parsePayload([]byte(res.Stdout))
+}
+
+// parsePayload decodes Claude Code's credentials JSON (Keychain secret or
+// .credentials.json). A payload without an access token reads as logged out.
+func parsePayload(data []byte) (*Creds, error) {
 	var p payload
-	if err := json.Unmarshal([]byte(res.Stdout), &p); err != nil {
+	if err := json.Unmarshal(data, &p); err != nil {
 		return nil, ErrCredsParse
 	}
 	o := p.ClaudeAiOauth
