@@ -71,6 +71,7 @@ func (f fakeTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 func newCLI(t *testing.T, in string) *cliEnv {
 	t.Helper()
 	root := t.TempDir()
+	t.Setenv("HOME", root) // keychain's file fallback reads $HOME/.claude
 	p := paths.Paths{
 		Home: root, ClaudeDir: filepath.Join(root, ".claude"), ClaudeJSON: filepath.Join(root, ".claude.json"),
 		AccountsRoot: filepath.Join(root, "accts"), ShimPath: filepath.Join(root, "accts", "bin", "claude"),

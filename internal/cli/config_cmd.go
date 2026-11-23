@@ -16,6 +16,7 @@ const configUsage = "config show | set default-args <args...> | set args <accoun
 // Config keys for auto-switch.
 const (
 	keyAutoSwitch       = "auto-switch"
+	keyDefaultAccount   = "default-account"
 	keyAutoSwitchPrompt = "auto-switch-prompt"
 )
 
@@ -87,13 +88,29 @@ func (a *App) configSet(cfg config.Config, rest []string) int {
 		return a.saveConfig(withAccountArgs(cfg, rest[1], slices.Clone(rest[2:])))
 	case len(rest) == 2 && rest[0] == keyAutoSwitch:
 		return a.setAutoSwitch(cfg, rest[1])
+	case len(rest) == 2 && rest[0] == keyDefaultAccount:
+		return a.setDefaultAccount(cfg, rest[1])
 	case len(rest) >= 2 && rest[0] == keyAutoSwitchPrompt:
 		next := cfg
 		next.AutoSwitchPrompt = strings.Join(rest[1:], " ")
 		return a.saveConfig(next)
 	}
 	return a.usageErr("config set default-args <args...> | config set args <account> <args...> | " +
-		"config set auto-switch on|off | config set auto-switch-prompt <text>")
+		"config set auto-switch on|off | config set auto-switch-prompt <text> | config set default-account best|off")
+}
+
+// setDefaultAccount turns shim auto-pick on ("best") or off.
+func (a *App) setDefaultAccount(cfg config.Config, value string) int {
+	next := cfg
+	switch value {
+	case config.DefaultAccountBest:
+		next.DefaultAccount = config.DefaultAccountBest
+	case "off":
+		next.DefaultAccount = ""
+	default:
+		return a.usageErr("config set default-account best|off")
+	}
+	return a.saveConfig(next)
 }
 
 // setAutoSwitch stores the auto-switch setting ("on" or "off").

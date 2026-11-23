@@ -20,7 +20,7 @@ Commands:
   dash                          live dashboard: every action on a key
   add <name> [--email e] [--open mode]   create an account and log it in
   login <name> [--open mode] | --all    log in one account, or every logged-out one
-  list                          list accounts and their login state
+  list [--json]                 list accounts and their login state
   run <name> [claude args...]   run claude as an account
   <name> [claude args...]       same as run <name>
   best [claude args...]         run claude as the account with most headroom
@@ -37,9 +37,14 @@ Commands:
   config clear default-args | args <account>
   config set auto-switch on|off          resume on another account when one hits its limit
   config set auto-switch-prompt <text>   replace the resume prompt (clear auto-switch-prompt)
+  config set default-account best|off   launch plain claude on the account with most headroom
+  worker add <host> --accounts a,b [--yes]   set up another Mac as a worker over SSH
+  worker sync <name> | --all    push ccm and the shared setup to workers again
+  worker status [--json]        load, memory, Claude sessions and logins per worker
+  worker list                   list workers
   doctor [--fix]                check (and repair) the setup
   remove <name> [--purge]       unregister an account (--purge deletes its data)
-  shell-init zsh                print shell integration for ~/.zshrc
+  shell-init zsh [--worker]     print shell integration for ~/.zshrc (--worker: also claude())
   install                       install the shim and the ccm link
   version                       print the ccm version
   help                          show this help
@@ -71,6 +76,7 @@ var commands = map[string]handler{
 	"shell-init": (*App).cmdShellInit,
 	"install":    (*App).cmdInstall,
 	"dash":       (*App).cmdDash,
+	"worker":     (*App).cmdWorker,
 }
 
 // Main dispatches args (without the program name) and returns the exit code.

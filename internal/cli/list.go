@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -15,7 +16,9 @@ const listPad = 2
 
 // cmdList prints every account with its dir, email and login state.
 func (a *App) cmdList(ctx context.Context, args []string) int {
-	if _, code, ok := a.parseArgs(a.newFlags("list"), args, 0, "list"); !ok {
+	fs := a.newFlags("list")
+	asJSON := fs.Bool("json", false, "print name, email and login state as JSON")
+	if _, code, ok := a.parseArgs(fs, args, 0, "list [--json]"); !ok {
 		return code
 	}
 	accts, err := registry.Load(a.Paths)
@@ -23,6 +26,9 @@ func (a *App) cmdList(ctx context.Context, args []string) int {
 		return a.errorf("%v", err)
 	}
 	results := a.loginResults(ctx, accts)
+	if *asJSON {
+		return a.listJSON(accts, results)
+	}
 	tw := tabwriter.NewWriter(a.Out, 0, 0, listPad, ' ', 0)
 	fmt.Fprintln(tw, "NAME\tDIR\tEMAIL\tPLAN\tLOGGED IN")
 	for i, acct := range accts {
@@ -31,6 +37,25 @@ func (a *App) cmdList(ctx context.Context, args []string) int {
 	}
 	if err := tw.Flush(); err != nil {
 		return a.errorf("write list: %v", err)
+	}
+	return ExitOK
+}
+
+// listRow is one account in `ccm list --json` (no credentials).
+type listRow struct {
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	LoggedIn bool   `json:"loggedIn"`
+}
+
+func (a *App) listJSON(accts []registry.Account, results []loginResult) int {
+	rows := make([]listRow, len(accts))
+	for i, acct := range accts {
+		rows[i] = listRow{Name: acct.Name, Email: listEmail(acct, results[i]),
+			LoggedIn: results[i].err == nil && results[i].st.LoggedIn}
+	}
+	if err := json.NewEncoder(a.Out).Encode(rows); err != nil {
+		return a.errorf("write json: %v", err)
 	}
 	return ExitOK
 }

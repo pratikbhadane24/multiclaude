@@ -101,14 +101,21 @@ func (s SSHRemote) Read(ctx context.Context, p string) ([]byte, bool, error) {
 }
 
 // Write replaces a worker file atomically, backing up any existing one.
+// The temp file is created private (umask 077, mktemp) before the final
+// mode is applied, and a symlink at path is refused.
 func (s SSHRemote) Write(ctx context.Context, p string, data []byte, mode os.FileMode) error {
 	script := fmt.Sprintf(`set -e
+umask 077
 f=%s
+if [ -L "$f" ]; then echo "refusing to write through symlink $f" >&2; exit 1; fi
 mkdir -p "$(dirname "$f")"
 if [ -e "$f" ]; then cp -p "$f" "$f.ccm-backup-$(date +%%s)"; fi
-printf '%%s' %s | base64 -d > "$f.ccm-tmp"
-chmod %o "$f.ccm-tmp"
-mv "$f.ccm-tmp" "$f"`, shQuote(p), shQuote(base64.StdEncoding.EncodeToString(data)), mode.Perm())
+tmp=$(mktemp "$f.ccm-tmp.XXXXXX")
+trap 'rm -f "$tmp"' EXIT
+printf '%%s' %s | base64 -d > "$tmp"
+chmod %o "$tmp"
+mv "$tmp" "$f"
+trap - EXIT`, shQuote(p), shQuote(base64.StdEncoding.EncodeToString(data)), mode.Perm())
 	res, err := s.Run(ctx, script)
 	if err != nil {
 		return err
