@@ -58,8 +58,20 @@ func (a *App) Add(ctx context.Context, name, email string) int {
 	return a.AddWith(ctx, name, email, "")
 }
 
+// AddOptions adjusts `ccm add`.
+type AddOptions struct {
+	// IgnoreMain lets the account share main's login (workers, where main
+	// is not used by ccm).
+	IgnoreMain bool
+}
+
 // AddWith is Add with an optional login browser mode ("" keeps the existing one).
 func (a *App) AddWith(ctx context.Context, name, email, open string) int {
+	return a.AddWithOptions(ctx, name, email, open, AddOptions{})
+}
+
+// AddWithOptions is AddWith with extra options.
+func (a *App) AddWithOptions(ctx context.Context, name, email, open string, opts AddOptions) int {
 	mode, err := browser.ParseMode(open)
 	if err != nil {
 		return a.errorf("%v", err)
@@ -80,7 +92,11 @@ func (a *App) AddWith(ctx context.Context, name, email, open string) int {
 	if err != nil {
 		return a.errorf("%v", err)
 	}
-	if owner, dup := a.emailOwner(ctx, accts, name, email); dup {
+	others := accts
+	if opts.IgnoreMain {
+		others = withoutMain(accts)
+	}
+	if owner, dup := a.emailOwner(ctx, others, name, email); dup {
 		fmt.Fprintf(a.Err, "ccm: email %s is already used by account %q\n", email, owner)
 		return ExitMismatch
 	}
@@ -119,4 +135,14 @@ func (a *App) setupAccount(acct registry.Account, accts []registry.Account) int 
 		return a.errorf("%v", err)
 	}
 	return ExitOK
+}
+
+func withoutMain(accts []registry.Account) []registry.Account {
+	out := make([]registry.Account, 0, len(accts))
+	for _, x := range accts {
+		if !x.IsMain() {
+			out = append(out, x)
+		}
+	}
+	return out
 }

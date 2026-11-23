@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/pratikbhadane24/multiclaude/internal/paths"
 	"github.com/pratikbhadane24/multiclaude/internal/run"
@@ -244,5 +245,20 @@ func TestInstallCCMReplacesBinariesByRename(t *testing.T) {
 	last := r.scripts[len(r.scripts)-1]
 	if !strings.Contains(last, "mv -f .local/share/ccm/ccm.new .local/share/ccm/ccm") {
 		t.Fatalf("binary not renamed into place: %s", last)
+	}
+}
+
+func TestEnsureAccountsIgnoresWorkerMain(t *testing.T) {
+	r := newFakeRemote()
+	r.respond["list --json"] = run.Result{Stdout: `[{"name":"main","email":"i3@x","loggedIn":true}]`}
+	s := newSetup(t, r)
+	s.pollEvery = time.Millisecond
+
+	if err := s.EnsureAccounts(context.Background(), []string{"inbox3"}, map[string]string{"inbox3": "i3@x"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(r.interactive) != 1 || !strings.Contains(r.interactive[0], "--ignore-main") {
+		t.Fatalf("interactive = %v", r.interactive)
 	}
 }

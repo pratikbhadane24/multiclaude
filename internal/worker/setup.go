@@ -318,7 +318,7 @@ func (s *Setup) EnsureAccounts(ctx context.Context, names []string, emails map[s
 		if !consts.AccountNameRE.MatchString(name) || !safeEmail.MatchString(emails[name]) {
 			return fmt.Errorf("invalid account name or email for %q", name)
 		}
-		cmd := fmt.Sprintf("%s add %s --email %s", remoteCCM, name, emails[name])
+		cmd := fmt.Sprintf("%s add %s --email %s --ignore-main", remoteCCM, name, emails[name])
 		err := s.withCallbackForward(ctx, func(ctx context.Context) error {
 			code, err := s.R.Interactive(ctx, cmd)
 			if err == nil && code != 0 {

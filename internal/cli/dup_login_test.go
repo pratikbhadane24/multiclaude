@@ -39,3 +39,29 @@ func TestAddAllowedWhenMainLoggedOutOrDifferent(t *testing.T) {
 		t.Fatalf("code %d err %s", code, h2.err)
 	}
 }
+
+func TestAddIgnoreMainAllowsMainsEmail(t *testing.T) {
+	h := newHarness(t, "")
+	h.loggedIn[""], h.emails[""] = true, "admin@x.com"
+
+	h.app.AddWithOptions(context.Background(), "x", "admin@x.com", "", AddOptions{IgnoreMain: true})
+
+	if strings.Contains(h.err.String(), "already used") {
+		t.Fatalf("refused: %s", h.err)
+	}
+	accts, _ := registry.Load(h.p)
+	if _, ok := registry.Find(accts, "x"); !ok {
+		t.Fatal("account not created")
+	}
+}
+
+func TestAddIgnoreMainStillRefusesOtherAccounts(t *testing.T) {
+	h := newHarness(t, "")
+	h.app.AddWithOptions(context.Background(), "a", "a@x.com", "", AddOptions{})
+
+	code := h.app.AddWithOptions(context.Background(), "b", "a@x.com", "", AddOptions{IgnoreMain: true})
+
+	if code != ExitMismatch || !strings.Contains(h.err.String(), `already used by account "a"`) {
+		t.Fatalf("code %d err %s", code, h.err)
+	}
+}

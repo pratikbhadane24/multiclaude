@@ -9,11 +9,12 @@ func (a *App) cmdAdd(ctx context.Context, args []string) int {
 	fs := a.newFlags("add")
 	email := fs.String("email", "", "email of the Claude account")
 	open := fs.String("open", "", openUsage)
-	pos, code, ok := a.parseArgs(fs, args, 1, "add <name> [--email e] [--open mode]")
+	ignoreMain := fs.Bool("ignore-main", false, "allow the same login as main (used on workers)")
+	pos, code, ok := a.parseArgs(fs, args, 1, "add <name> [--email e] [--open mode] [--ignore-main]")
 	if !ok {
 		return code
 	}
-	return a.AddWith(ctx, pos[0], *email, *open)
+	return a.AddWithOptions(ctx, pos[0], *email, *open, AddOptions{IgnoreMain: *ignoreMain})
 }
 
 // cmdLogin handles `ccm login <name>` and `ccm login --all`.
