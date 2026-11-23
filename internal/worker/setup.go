@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/pratikbhadane24/multiclaude/internal/consts"
 	"github.com/pratikbhadane24/multiclaude/internal/mcp"
@@ -55,8 +56,9 @@ type Setup struct {
 	Yes     bool
 	Confirm func(question string) bool
 	// Home is the worker's home dir, filled in by Probe.
-	Home string
-	info Info
+	Home      string
+	info      Info
+	pollEvery time.Duration
 }
 
 // Step is one named stage of worker setup.
@@ -311,17 +313,21 @@ func (s *Setup) EnsureAccounts(ctx context.Context, names []string, emails map[s
 		if i := slices.IndexFunc(have, func(e ListEntry) bool { return e.Name == name }); i >= 0 && have[i].LoggedIn {
 			continue
 		}
-		fmt.Fprintf(s.Out, "→ log in %s on the worker: copy the link it prints into the browser signed in to %s\n", name, emails[name])
+		fmt.Fprintf(s.Out, "→ log in %s on the worker: open the link it prints in the browser signed in to %s.\n"+
+			"  After you approve, the browser hands the login to the worker through an SSH tunnel.\n", name, emails[name])
 		if !consts.AccountNameRE.MatchString(name) || !safeEmail.MatchString(emails[name]) {
 			return fmt.Errorf("invalid account name or email for %q", name)
 		}
 		cmd := fmt.Sprintf("%s add %s --email %s", remoteCCM, name, emails[name])
-		code, err := s.R.Interactive(ctx, cmd)
+		err := s.withCallbackForward(ctx, func(ctx context.Context) error {
+			code, err := s.R.Interactive(ctx, cmd)
+			if err == nil && code != 0 {
+				err = fmt.Errorf("login of %s on the worker exited %d", name, code)
+			}
+			return err
+		})
 		if err != nil {
 			return err
-		}
-		if code != 0 {
-			return fmt.Errorf("login of %s on the worker exited %d", name, code)
 		}
 	}
 	return nil

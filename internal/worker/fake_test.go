@@ -32,6 +32,21 @@ type fakeRemote struct {
 	copies      [][2]string
 	rsyncs      []rsyncCall
 	writes      []writeCall
+	// onScript, when set, answers scripts before respond (ok=false falls through).
+	onScript func(script string) (run.Result, bool)
+	forwards []int
+	stopped  []int
+}
+
+func (f *fakeRemote) Forward(_ context.Context, port int) (func(), error) {
+	f.mu.Lock()
+	f.forwards = append(f.forwards, port)
+	f.mu.Unlock()
+	return func() {
+		f.mu.Lock()
+		f.stopped = append(f.stopped, port)
+		f.mu.Unlock()
+	}, nil
 }
 
 func newFakeRemote() *fakeRemote {
@@ -49,6 +64,11 @@ func (f *fakeRemote) Run(ctx context.Context, script string) (run.Result, error)
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.scripts = append(f.scripts, script)
+	if f.onScript != nil {
+		if r, ok := f.onScript(script); ok {
+			return r, nil
+		}
+	}
 	for k, r := range f.respond {
 		if strings.Contains(script, k) {
 			return r, nil

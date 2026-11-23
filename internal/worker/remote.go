@@ -20,6 +20,8 @@ type Remote interface {
 	Rsync(ctx context.Context, local, remoteDir string, excludes []string) error
 	Read(ctx context.Context, path string) ([]byte, bool, error)
 	Write(ctx context.Context, path string, data []byte, mode os.FileMode) error
+	// Forward tunnels a local port to the same port on the worker.
+	Forward(ctx context.Context, port int) (stop func(), err error)
 }
 
 const (
