@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pratikbhadane24/multiclaude/internal/config"
 	"github.com/pratikbhadane24/multiclaude/internal/links"
 	"github.com/pratikbhadane24/multiclaude/internal/mcp"
 	"github.com/pratikbhadane24/multiclaude/internal/paths"
@@ -45,7 +46,11 @@ type Deps struct {
 // real claude unchanged. It returns only if exec fails or is refused.
 func Main(args []string, env []string, deps Deps) error {
 	p := deps.Paths
+	chosen := lookupEnv(env, accountEnv) != ""
 	env = safeAutoPick(p, env, deps.Stderr)
+	if name := lookupEnv(env, accountEnv); !chosen && name != "" {
+		args = withDefaultArgs(p, name, args)
+	}
 	if dir, ok := accountDir(env, p); ok {
 		prepareAccount(p, dir, deps)
 	}
@@ -64,6 +69,16 @@ func Main(args []string, env []string, deps Deps) error {
 		return fmt.Errorf("exec %s: %w", p.RealClaude, err)
 	}
 	return nil
+}
+
+// withDefaultArgs prepends ccm's default and per-account args, as
+// `ccm best` does, for a launch whose account the shim picked.
+func withDefaultArgs(p paths.Paths, name string, args []string) []string {
+	cfg, err := config.Load(p)
+	if err != nil {
+		return args
+	}
+	return config.MergedArgs(cfg, name, args)
 }
 
 // safeAutoPick applies AutoPick; a panic keeps env unchanged so launching

@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pratikbhadane24/multiclaude/internal/config"
 	"github.com/pratikbhadane24/multiclaude/internal/consts"
 	"github.com/pratikbhadane24/multiclaude/internal/mcp"
 	"github.com/pratikbhadane24/multiclaude/internal/paths"
@@ -209,7 +210,27 @@ func (s *Setup) PushSetup(ctx context.Context) error {
 	if err := s.pushMCP(ctx); err != nil {
 		return err
 	}
-	return s.runOK(ctx, remoteCCM+" config set default-account best")
+	if err := s.runOK(ctx, remoteCCM+" config set default-account best"); err != nil {
+		return err
+	}
+	return s.pushDefaultArgs(ctx)
+}
+
+// pushDefaultArgs copies the hub's default claude args (e.g.
+// --dangerously-skip-permissions) to the worker's ccm config.
+func (s *Setup) pushDefaultArgs(ctx context.Context) error {
+	cfg, err := config.Load(s.P)
+	if err != nil {
+		return fmt.Errorf("read hub ccm config: %w", err)
+	}
+	if len(cfg.DefaultArgs) == 0 {
+		return nil
+	}
+	quoted := make([]string, len(cfg.DefaultArgs))
+	for i, a := range cfg.DefaultArgs {
+		quoted[i] = shQuote(a)
+	}
+	return s.runOK(ctx, remoteCCM+" config set default-args "+strings.Join(quoted, " "))
 }
 
 // pushItems sends each shared item that exists on the hub: in one tar

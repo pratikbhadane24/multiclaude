@@ -230,3 +230,40 @@ func TestPresentWithTimesOut(t *testing.T) {
 		t.Fatalf("ok=%v took %v", ok, time.Since(start))
 	}
 }
+
+func TestMainAutoPickAppliesDefaultArgs(t *testing.T) {
+	f := newFixture(t)
+	accts := []registry.Account{{Name: "main"}, {Name: "inbox2", Dir: filepath.Join(f.p.AccountsRoot, "inbox2")}}
+	if err := registry.Save(f.p, accts); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Config{DefaultAccount: "best", DefaultArgs: []string{"--dangerously-skip-permissions"}}
+	if err := config.Save(f.p, cfg); err != nil {
+		t.Fatal(err)
+	}
+	stubPresent(t, func(a registry.Account) bool { return !a.IsMain() })
+
+	if err := Main([]string{"-p", "hi"}, []string{"PATH=/bin"}, f.deps()); err != nil {
+		t.Fatal(err)
+	}
+
+	want := []string{"claude", "--dangerously-skip-permissions", "-p", "hi"}
+	if len(f.calls) != 1 || !slices.Equal(f.calls[0].argv, want) {
+		t.Fatalf("argv = %+v", f.calls)
+	}
+}
+
+func TestMainNoAutoPickKeepsArgs(t *testing.T) {
+	f := newFixture(t)
+	if err := config.Save(f.p, config.Config{DefaultArgs: []string{"--x"}}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Main([]string{"-p"}, []string{"PATH=/bin"}, f.deps()); err != nil {
+		t.Fatal(err)
+	}
+
+	if !slices.Equal(f.calls[0].argv, []string{"claude", "-p"}) {
+		t.Fatalf("argv = %v", f.calls[0].argv)
+	}
+}

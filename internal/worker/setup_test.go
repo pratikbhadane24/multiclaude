@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pratikbhadane24/multiclaude/internal/config"
 	"github.com/pratikbhadane24/multiclaude/internal/paths"
 	"github.com/pratikbhadane24/multiclaude/internal/run"
 )
@@ -285,5 +286,23 @@ func TestEnsureAccountsRelogsWrongLogin(t *testing.T) {
 
 	if len(r.interactive) != 1 {
 		t.Fatalf("wrong login not redone: %v", r.interactive)
+	}
+}
+
+func TestPushSetupCopiesDefaultArgs(t *testing.T) {
+	r := newFakeRemote()
+	s := newSetup(t, r)
+	if err := config.Save(s.P, config.Config{DefaultArgs: []string{"--dangerously-skip-permissions"}}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.PushSetup(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if !slices.ContainsFunc(r.scripts, func(sc string) bool {
+		return strings.Contains(sc, "config set default-args '--dangerously-skip-permissions'")
+	}) {
+		t.Fatalf("scripts = %v", r.scripts)
 	}
 }
