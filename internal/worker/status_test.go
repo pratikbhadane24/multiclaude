@@ -30,3 +30,13 @@ func TestCollectUnreachableDoesNotBlock(t *testing.T) {
 		t.Fatalf("fast = %+v", h)
 	}
 }
+
+func TestParseHealthWrongLoginIsNotLoggedIn(t *testing.T) {
+	out := "load=1\ncores=1\naccounts=[{\"name\":\"inbox3\",\"email\":\"i3@x\",\"loginEmail\":\"i2@x\",\"loggedIn\":true}]\n"
+
+	h := parseHealth(Health{Name: "w"}, out)
+
+	if h.Accounts["inbox3"] {
+		t.Fatalf("inbox3 signed in as i2 counted as logged in: %+v", h.Accounts)
+	}
+}

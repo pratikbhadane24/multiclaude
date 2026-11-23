@@ -91,7 +91,7 @@ func parseHealth(h Health, out string) Health {
 	if json.Unmarshal([]byte(kv["accounts"]), &rows) == nil {
 		h.Accounts = make(map[string]bool, len(rows))
 		for _, r := range rows {
-			h.Accounts[r.Name] = r.LoggedIn
+			h.Accounts[r.Name] = r.loggedInAs(r.Email)
 		}
 	}
 	return h

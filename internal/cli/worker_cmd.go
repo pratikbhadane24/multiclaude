@@ -232,7 +232,7 @@ func accountsText(want []string, loggedIn map[string]bool) string {
 		if loggedIn[n] {
 			parts = append(parts, n)
 		} else {
-			parts = append(parts, n+" (logged out)")
+			parts = append(parts, n+" (not logged in as itself)")
 		}
 	}
 	return strings.Join(parts, ", ")
