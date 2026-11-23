@@ -1,0 +1,30 @@
+name: Release
+
+# Push a tag like v1.2.3 to publish a GitHub release with macOS archives.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    # The binaries are pure Go (no cgo), so they cross-compile from Linux.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build archives
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: make dist VERSION="$VERSION"
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          gh release create "$VERSION" dist/*.tar.gz dist/checksums.txt \
+            --title "$VERSION" --generate-notes --verify-tag

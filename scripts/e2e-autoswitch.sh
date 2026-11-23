@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # End-to-end test of ccm's auto-switch-on-usage-limit using a fake claude.
-# Runs entirely in a throwaway HOME; see docs/e2e-autoswitch.md.
+# Runs entirely in a throwaway HOME and never touches your real accounts.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"

@@ -1,6 +1,12 @@
 coverage.out
-.superpowers
 /bin/
 /dist/
+.superpowers
 .claude/worktrees/
-docs/
+
+# Internal planning notes and experiments (kept locally, not published)
+/docs/superpowers/
+/docs/experiments/
+/docs/decisions.md
+/docs/e2e-autoswitch.md
+/docs/e2e-checklist.md
