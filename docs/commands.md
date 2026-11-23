@@ -5,7 +5,7 @@
 | `ccm` / `ccm dash` | Dashboard (bare `ccm` needs a terminal). |
 | `ccm add <name> [--email e] [--open mode]` | Create the account, link shared setup, sync MCP servers, register, log in. Prompts for the email if omitted. Re-runnable. |
 | `ccm login <name> [--open mode]` / `ccm login --all` | (Re)login and verify the email. `--all` cannot be combined with `--open`. |
-| `ccm list` | Table: `NAME  DIR  EMAIL  PLAN  LOGGED IN`. |
+| `ccm list [--json]` | Table: `NAME  DIR  EMAIL  PLAN  LOGGED IN`. `--json` prints name, email and login state. |
 | `ccm run <name> [claude args]` / `ccm <name> [claude args]` | Run Claude as that account. Exit code is the child's. |
 | `ccm best [claude args]` | Run on the account with the most headroom; prints the pick to stderr. Exit 2 if all are limited. |
 | `ccm use <name>` | Print shell code that switches this shell to the account (needs the `shell-init` wrapper). Sets `CCM_ACCOUNT`. |
@@ -18,16 +18,21 @@
 | `ccm config clear default-args` / `ccm config clear args <account>` | Remove them. Run `ccm t3-sync` after. |
 | `ccm config set auto-switch on\|off` | Resume on another account automatically when one hits its limit (see Auto-switch). |
 | `ccm config set auto-switch-prompt <text>` / `ccm config clear auto-switch-prompt` | Replace (or restore) the prompt sent after a switch. |
+| `ccm config set default-account best\|off` | `best`: plain `claude` starts on the account with the most headroom (from cached usage). Set on workers by `ccm worker add`. |
+| `ccm worker add <host> --accounts a,b [--name n] [--yes]` | Set up another Mac as a worker over SSH (see [Workers](workers.md)). Re-runnable. |
+| `ccm worker sync <name>` / `ccm worker sync --all` | Push ccm and the shared setup to workers again. |
+| `ccm worker status [--json]` | Per worker: reachable, load, free memory, running Claude sessions, ccm version, account logins. |
+| `ccm worker list` | Workers and their accounts. |
 | `ccm sync` | Link shared items, merge account history, copy MCP servers into every account. |
 | `ccm t3-sync` | Add or update one `claude-<account>` instance per account and sync `launchArgs`. Backs up T3 settings; restart T3 after. |
 | `ccm doctor [--fix]` | Check (and repair) the setup. Exit 0 only if nothing fails or warns. |
 | `ccm remove <name> [--purge]` | Unregister (and optionally delete). |
-| `ccm shell-init zsh` | Print the zsh wrapper and PATH line for `~/.zshrc`. |
+| `ccm shell-init zsh [--worker]` | Print the zsh wrapper and PATH line for `~/.zshrc`. `--worker` also defines `claude()` to run the launcher. |
 | `ccm install` | Install the launcher and the `ccm` link. |
 | `ccm version` (`--version`, `-v`) | Print the multiclaude version. |
 | `ccm help` | Usage text. |
 
-Account names are `[a-z0-9-]{1,32}` and cannot be a reserved name: `main add login list run best use status sync t3-sync doctor remove shell-init help install bin browser config`, plus the other command names (`continue`, `statusline`, `dash`, `version`).
+Account names are `[a-z0-9-]{1,32}` and cannot be a reserved name: `main add login list run best use status sync t3-sync doctor remove shell-init help install bin browser config`, plus the other command names (`continue`, `statusline`, `dash`, `version`, `worker`).
 
 ## Exit codes
 

@@ -4,6 +4,16 @@ Notable changes to multiclaude. The format follows [Keep a Changelog](https://ke
 
 ## Unreleased
 
+### Added
+
+- `ccm worker add|sync|status|list`: set up other Macs as workers over SSH and keep them in step (for Orca SSH hosts).
+- `ccm config set default-account best`: plain `claude` starts on the account with the most headroom.
+- `ccm list --json` and `ccm shell-init zsh --worker`.
+
+### Changed
+
+- Logins are also read from an account's `.credentials.json` when the Keychain has none (SSH sessions).
+
 ## v0.1.0 - 2026-11-23
 
 First public release.

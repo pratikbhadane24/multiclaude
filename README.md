@@ -73,6 +73,7 @@ ccm work       start Claude on the account called "work"
 | [Accounts](docs/accounts.md) | Adding, logging in and removing accounts; login link modes |
 | [Dashboard and status line](docs/dashboard.md) | Dashboard keys and states, the Claude status line segment, how usage is read |
 | [Configuration](docs/configuration.md) | Default and per-account Claude arguments |
+| [Workers](docs/workers.md) | Running agents on other Macs from one hub with Orca |
 | [Auto-switch](docs/auto-switch.md) | Moving a running conversation to another account when a limit is hit |
 | [Shared history and T3 Code](docs/history-and-t3.md) | How chats are shared and merged; T3 Code instances |
 | [Command reference](docs/commands.md) | Every command, flag and exit code |
