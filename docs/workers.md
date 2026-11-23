@@ -40,10 +40,15 @@ Run it in a terminal; the account logins are interactive. Each step prints ✓ o
 3. **install ccm:** this `ccm` and `ccm-shim` are copied to `~/.local/share/ccm`, then `ccm install` runs.
 4. **shell setup:** a marked block (`# >>> ccm >>>`) goes into the worker's `~/.zshenv` (PATH for SSH commands) and `~/.zshrc` (`ccm shell-init zsh --worker`). The worker block also defines a `claude` function, so in Orca panes `claude` always goes through ccm. ccm asks first unless you pass `--yes`.
 5. **push shared setup:** `CLAUDE.md`, rules, skills, plugins, scripts, agents, commands, hooks, output styles and keybindings are copied (changes only, nothing deleted). `settings.json` is merged: your settings win, the worker's own hooks (Orca's) are kept, and the status line points at the worker's ccm. The hub's MCP servers go to `~/.claude-accounts/mcp-hub.json`, so the worker's `~/.claude.json` is never written. Auto-pick is turned on (`defaultAccount: best`).
-6. **log in accounts:** each account that is not logged in yet runs `ccm add` on the worker. Copy the link it prints into the browser profile signed in to that account, then paste the code back.
-7. **doctor:** `ccm doctor` runs on the worker.
+6. **git identity:** your git `user.name`, `user.email` and `url.*.insteadOf` rewrites are copied to the worker. Credential settings are never copied.
+7. **GitHub CLI:** `gh` (the hub's version) is installed into `~/.local/bin` from GitHub's releases if the worker has none. No Homebrew or sudo is needed.
+8. **log in accounts:** each account that is not logged in yet runs `ccm add` on the worker. Copy the link it prints into the browser profile signed in to that account, then paste the code back.
+9. **GitHub login:** if `gh` on the worker is not signed in, `gh auth login --web` runs. Open the link it prints in any browser and enter the code. `gh auth setup-git` then lets git push and pull over HTTPS. Like the Claude logins, the token is never copied from the hub.
+10. **doctor:** `ccm doctor` runs on the worker.
 
 Never pushed: chat history (`projects`, `file-history`, `todos`, `plans`), logins (`.credentials.json`) and `~/.claude.json`. Logins are never copied between machines, because one machine's token refresh would log the other out. Each worker logs in once, per account.
+
+Repositories are not copied. When you pick the worker under **Run on** in Orca, Orca offers to clone the project there. Work moves between machines through GitHub, so push from one Mac and pull on the other.
 
 ## Day to day
 

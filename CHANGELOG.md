@@ -9,6 +9,7 @@ Notable changes to multiclaude. The format follows [Keep a Changelog](https://ke
 - `ccm worker add|sync|status|list`: set up other Macs as workers over SSH and keep them in step (for Orca SSH hosts).
 - `ccm config set default-account best`: plain `claude` starts on the account with the most headroom.
 - `ccm list --json` and `ccm shell-init zsh --worker`.
+- `ccm worker add` copies your git identity, installs `gh` and signs it in to GitHub on the worker.
 
 ### Changed
 

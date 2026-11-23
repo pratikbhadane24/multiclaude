@@ -54,6 +54,7 @@ func (a *App) workerAdd(ctx context.Context, args []string) int {
 	steps := a.setupSteps(s, true)
 	steps = append(steps,
 		worker.Step{Name: "log in accounts", Run: func(ctx context.Context) error { return s.EnsureAccounts(ctx, names, emails) }},
+		worker.Step{Name: "GitHub login", Run: s.GitHubLogin},
 		worker.Step{Name: "save worker", Run: func(context.Context) error { return a.saveWorker(w) }},
 		worker.Step{Name: "doctor", Run: s.Doctor},
 	)
@@ -148,12 +149,14 @@ func (a *App) setupSteps(s *worker.Setup, installClaude bool) []worker.Step {
 		}},
 		worker.Step{Name: "shell setup", Run: s.ShellBlocks},
 		worker.Step{Name: "push shared setup", Run: s.PushSetup},
+		worker.Step{Name: "git identity", Run: s.GitIdentity},
+		worker.Step{Name: "GitHub CLI", Run: s.InstallGH},
 	)
 }
 
 func (a *App) newSetup(host string, yes bool) *worker.Setup {
 	return &worker.Setup{
-		P: a.Paths, R: worker.SSHRemote{Host: host, R: a.Runner}, Out: a.Out, Yes: yes,
+		P: a.Paths, R: worker.SSHRemote{Host: host, R: a.Runner}, Out: a.Out, Yes: yes, Local: a.Runner,
 		Confirm: func(q string) bool {
 			ans, err := a.promptLine(context.Background(), q+" [y/N] ")
 			return err == nil && strings.EqualFold(ans, "y")

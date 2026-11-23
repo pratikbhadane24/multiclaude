@@ -20,6 +20,7 @@ import (
 	"github.com/pratikbhadane24/multiclaude/internal/consts"
 	"github.com/pratikbhadane24/multiclaude/internal/mcp"
 	"github.com/pratikbhadane24/multiclaude/internal/paths"
+	"github.com/pratikbhadane24/multiclaude/internal/run"
 )
 
 // Remote layout on a worker (relative to its home).
@@ -46,8 +47,8 @@ var ErrDeclined = errors.New("declined")
 
 // Info is what Probe learned about a worker.
 type Info struct {
-	OS, Arch, Home                              string
-	HasGit, HasClang, HasClaude, HasNPX, HasUVX bool
+	OS, Arch, Home                                     string
+	HasGit, HasClang, HasClaude, HasNPX, HasUVX, HasGH bool
 }
 
 // Setup performs the `ccm worker add/sync` steps against one worker.
@@ -57,6 +58,8 @@ type Setup struct {
 	Out     io.Writer
 	Yes     bool
 	Confirm func(question string) bool
+	// Local runs commands on the hub (reading its git config and gh version).
+	Local run.Runner
 	// Home is the worker's home dir, filled in by Probe.
 	Home      string
 	info      Info
@@ -90,7 +93,7 @@ func hubArch() string {
 
 const probeScript = `echo "os=$(uname -s)"; echo "arch=$(uname -m)"; echo "home=$HOME"
 export PATH="$HOME/.local/bin:$PATH"
-for t in git clang claude npx uvx; do if command -v "$t" >/dev/null 2>&1; then echo "$t=1"; else echo "$t=0"; fi; done`
+for t in git clang claude npx uvx gh; do if command -v "$t" >/dev/null 2>&1; then echo "$t=1"; else echo "$t=0"; fi; done`
 
 // Probe checks the worker's OS, architecture and tools. A worker whose
 // OS or architecture differs from the hub's is refused.
@@ -103,7 +106,7 @@ func (s *Setup) Probe(ctx context.Context) (Info, error) {
 	info := Info{
 		OS: kv["os"], Arch: kv["arch"], Home: kv["home"],
 		HasGit: kv["git"] == "1", HasClang: kv["clang"] == "1", HasClaude: kv["claude"] == "1",
-		HasNPX: kv["npx"] == "1", HasUVX: kv["uvx"] == "1",
+		HasNPX: kv["npx"] == "1", HasUVX: kv["uvx"] == "1", HasGH: kv["gh"] == "1",
 	}
 	if info.OS != hubOS() || info.Arch != hubArch() {
 		return info, fmt.Errorf("worker is %s/%s but this ccm is %s/%s; only matching workers are supported",
