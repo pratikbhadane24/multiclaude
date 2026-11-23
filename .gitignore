@@ -3,3 +3,4 @@ coverage.out
 /bin/
 /dist/
 .claude/worktrees/
+docs/
