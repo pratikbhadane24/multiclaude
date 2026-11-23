@@ -220,3 +220,29 @@ func TestEnsureAccountsRejectsShellUnsafeEmail(t *testing.T) {
 		t.Fatalf("err=%v interactive=%v", err, r.interactive)
 	}
 }
+
+func TestInstallCCMReplacesBinariesByRename(t *testing.T) {
+	dir := t.TempDir()
+	exe := filepath.Join(dir, "ccm")
+	for _, f := range []string{exe, filepath.Join(dir, "ccm-shim")} {
+		if err := os.WriteFile(f, []byte("bin"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r := newFakeRemote()
+	s := newSetup(t, r)
+
+	if err := s.InstallCCM(context.Background(), exe); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, c := range r.copies {
+		if !strings.HasSuffix(c[1], ".new") {
+			t.Fatalf("copied straight over the live binary: %v", c)
+		}
+	}
+	last := r.scripts[len(r.scripts)-1]
+	if !strings.Contains(last, "mv -f .local/share/ccm/ccm.new .local/share/ccm/ccm") {
+		t.Fatalf("binary not renamed into place: %s", last)
+	}
+}

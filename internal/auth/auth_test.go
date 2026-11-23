@@ -21,7 +21,7 @@ func TestEnvMainDropsConfigDir(t *testing.T) {
 			t.Fatalf("still set: %v", got)
 		}
 	}
-	if len(got) != 2 || base[1] != "CLAUDE_CONFIG_DIR=/x" {
+	if len(got) != 3 || got[2] != "CCM_ACCOUNT=main" || base[1] != "CLAUDE_CONFIG_DIR=/x" {
 		t.Fatalf("got %v base %v", got, base)
 	}
 }
@@ -114,5 +114,24 @@ func TestLoginWithoutEmailOmitsFlag(t *testing.T) {
 	}
 	if strings.Contains(strings.Join(f.Calls[0].Args, " "), "--email") {
 		t.Fatal("unexpected --email")
+	}
+}
+
+func TestEnvNamesTheAccount(t *testing.T) {
+	base := []string{"A=1", "CCM_ACCOUNT=old"}
+	for _, a := range []registry.Account{{Name: "main"}, {Name: "work", Dir: "/d/work"}} {
+		got := Env(a, base)
+		n := 0
+		for _, e := range got {
+			if strings.HasPrefix(e, "CCM_ACCOUNT=") {
+				n++
+				if e != "CCM_ACCOUNT="+a.Name {
+					t.Fatalf("%s: got %q", a.Name, e)
+				}
+			}
+		}
+		if n != 1 || base[1] != "CCM_ACCOUNT=old" {
+			t.Fatalf("%s: got %v base %v", a.Name, got, base)
+		}
 	}
 }

@@ -69,14 +69,13 @@ func Present(ctx context.Context, r run.Runner, a registry.Account) (bool, error
 	if err != nil {
 		return false, fmt.Errorf("keychain: run security: %w", err)
 	}
-	switch res.Code {
-	case 0:
+	if res.Code == 0 {
 		return true, nil
-	case notFoundCode:
-		c, err := fileCreds(a)
-		return c != nil, err
 	}
-	return false, fmt.Errorf("keychain: security exited %d", res.Code)
+	// Not found (44) or locked (36, e.g. over SSH): Claude Code then keeps
+	// the login in the credentials file.
+	c, err := fileCreds(a)
+	return c != nil, err
 }
 
 // Read fetches an account's credentials from the Keychain, or, when the

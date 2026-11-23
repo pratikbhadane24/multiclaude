@@ -77,6 +77,10 @@ func (a *App) workerAccounts(list string) ([]string, map[string]string, int, boo
 	emails := map[string]string{}
 	for _, n := range strings.Split(list, ",") {
 		n = strings.TrimSpace(n)
+		if _, dup := emails[n]; dup {
+			fmt.Fprintf(a.Err, "ccm: %q is listed twice in --accounts\n", n)
+			return nil, nil, ExitUsage, false
+		}
 		acct, ok := registry.Find(accts, n)
 		if !ok || acct.IsMain() || acct.Email == "" {
 			fmt.Fprintf(a.Err, "ccm: %q is not a named hub account with an email (see ccm list)\n", n)

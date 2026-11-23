@@ -92,3 +92,11 @@ func TestWorkerIsReserved(t *testing.T) {
 		t.Fatal("worker not reserved")
 	}
 }
+
+func TestWorkerAddDuplicateAccountIsUsageError(t *testing.T) {
+	e := newCLI(t, "")
+
+	if code := e.main("worker", "add", "worker1", "--accounts", "work,work"); code != ExitUsage {
+		t.Fatalf("code=%d err=%s", code, e.err)
+	}
+}

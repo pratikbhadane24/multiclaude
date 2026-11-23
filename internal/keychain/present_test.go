@@ -23,8 +23,10 @@ func TestPresentCodes(t *testing.T) {
 			t.Fatalf("argv %+v (must not contain -w)", f.Calls[0])
 		}
 	}
-	if _, err := Present(context.Background(), fakeWith(run.Result{Code: 1}, nil), a); err == nil {
-		t.Fatal("want error for other exit code")
+	// Any other code (e.g. 36: Keychain locked over SSH) falls back to the
+	// credentials file, which this account does not have.
+	if ok, err := Present(context.Background(), fakeWith(run.Result{Code: 1}, nil), a); err != nil || ok {
+		t.Fatalf("other exit code: %v %v", ok, err)
 	}
 	if _, err := Present(context.Background(), fakeWith(run.Result{}, errors.New("boom")), a); err == nil {
 		t.Fatal("want runner error")

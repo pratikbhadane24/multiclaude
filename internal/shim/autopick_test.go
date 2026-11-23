@@ -1,16 +1,19 @@
 package shim
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/pratikbhadane24/multiclaude/internal/config"
 	"github.com/pratikbhadane24/multiclaude/internal/paths"
 	"github.com/pratikbhadane24/multiclaude/internal/registry"
+	"github.com/pratikbhadane24/multiclaude/internal/run"
 	"github.com/pratikbhadane24/multiclaude/internal/status"
 )
 
@@ -178,5 +181,52 @@ func TestMainAppliesAutoPickBeforeLaunch(t *testing.T) {
 
 	if len(f.calls) != 1 || envValue(f.calls[0].env, "CCM_ACCOUNT") != "inbox2" {
 		t.Fatalf("exec env = %+v", f.calls)
+	}
+}
+
+func TestAutoPickSkipsWhenAccountChosen(t *testing.T) {
+	p := pickFixture(t, false)
+	writeCache(t, p, map[string]float64{"inbox2": 90, "inbox3": 10})
+	env := []string{"PATH=/bin", "CCM_ACCOUNT=main"}
+
+	got := AutoPick(p, env, pickNow)
+
+	if !slices.Equal(got, env) {
+		t.Fatalf("env changed: %v", got)
+	}
+}
+
+func TestAutoPickReplacesEmptyAccountVar(t *testing.T) {
+	p := pickFixture(t, false)
+	writeCache(t, p, map[string]float64{"inbox2": 90, "inbox3": 10})
+
+	got := AutoPick(p, []string{"CCM_ACCOUNT=", "PATH=/bin"}, pickNow)
+
+	n := 0
+	for _, e := range got {
+		if strings.HasPrefix(e, "CCM_ACCOUNT=") {
+			n++
+		}
+	}
+	if n != 1 || envValue(got, "CCM_ACCOUNT") != "inbox3" {
+		t.Fatalf("env = %v", got)
+	}
+}
+
+// blockingRunner never answers until its context ends.
+type blockingRunner struct{}
+
+func (blockingRunner) Run(ctx context.Context, _ string, _ []string, _ []string, _ bool) (run.Result, error) {
+	<-ctx.Done()
+	return run.Result{}, ctx.Err()
+}
+
+func TestPresentWithTimesOut(t *testing.T) {
+	start := time.Now()
+
+	ok := presentWith(blockingRunner{}, registry.Account{Name: "inbox2", Dir: "/nowhere"}, 50*time.Millisecond)
+
+	if ok || time.Since(start) > time.Second {
+		t.Fatalf("ok=%v took %v", ok, time.Since(start))
 	}
 }

@@ -144,12 +144,17 @@ func (s *Setup) InstallCCM(ctx context.Context, selfExe string) error {
 	if err := s.runOK(ctx, "mkdir -p "+remoteCCMDir); err != nil {
 		return err
 	}
+	// Copy beside the live binaries and rename over them: rewriting a
+	// signed Mach-O in place gets it killed on its next run.
+	var swap []string
 	for _, f := range []string{selfExe, shim} {
-		if err := s.R.Copy(ctx, f, remoteCCMDir+"/"+filepath.Base(f)); err != nil {
+		dest := remoteCCMDir + "/" + filepath.Base(f)
+		if err := s.R.Copy(ctx, f, dest+".new"); err != nil {
 			return err
 		}
+		swap = append(swap, fmt.Sprintf("chmod 755 %[1]s.new && mv -f %[1]s.new %[1]s", dest))
 	}
-	return s.runOK(ctx, fmt.Sprintf("chmod 755 %[1]s/ccm %[1]s/%[2]s && %[1]s/ccm install", remoteCCMDir, shimBinName))
+	return s.runOK(ctx, strings.Join(swap, " && ")+" && "+remoteCCMDir+"/ccm install")
 }
 
 // ShellBlocks adds ccm's marked blocks to the worker's ~/.zshenv (PATH for

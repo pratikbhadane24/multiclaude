@@ -135,3 +135,20 @@ func TestReadBadFileJSON(t *testing.T) {
 		t.Fatalf("want ErrCredsParse, got %v", err)
 	}
 }
+
+func TestPresentLockedKeychainFallsBackToFile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := filepath.Join(home, "acct")
+	acct := registry.Account{Name: "acct", Dir: dir}
+	locked := fakeWith(run.Result{Code: 36}, nil)
+
+	ok, err := Present(context.Background(), locked, acct)
+	if err != nil || ok {
+		t.Fatalf("no file: got %v, %v", ok, err)
+	}
+	writeCreds(t, dir, credsJSON, 0o600)
+	if ok, err = Present(context.Background(), locked, acct); err != nil || !ok {
+		t.Fatalf("with file: got %v, %v", ok, err)
+	}
+}

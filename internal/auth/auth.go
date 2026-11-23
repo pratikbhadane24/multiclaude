@@ -32,16 +32,23 @@ func (e *MismatchError) Error() string {
 	return fmt.Sprintf("signed in as %s, expected %s", e.Got, e.Want)
 }
 
+// accountEnv names the account a process runs as; it also tells the shim
+// that the account was chosen, so it never auto-picks another one.
+const accountEnv = "CCM_ACCOUNT"
+
 // Env returns a new env slice with CLAUDE_CONFIG_DIR set for the account
-// (or removed for main). base is not modified.
+// (or removed for main) and CCM_ACCOUNT set to its name. base is not
+// modified.
 func Env(a registry.Account, base []string) []string {
 	prefix := configDirEnv + "="
-	out := make([]string, 0, len(base)+1)
+	acctPrefix := accountEnv + "="
+	out := make([]string, 0, len(base)+2)
 	for _, e := range base {
-		if !strings.HasPrefix(e, prefix) {
+		if !strings.HasPrefix(e, prefix) && !strings.HasPrefix(e, acctPrefix) {
 			out = append(out, e)
 		}
 	}
+	out = append(out, acctPrefix+a.Name)
 	if a.IsMain() {
 		return out
 	}
