@@ -262,3 +262,18 @@ func TestEnsureAccountsIgnoresWorkerMain(t *testing.T) {
 		t.Fatalf("interactive = %v", r.interactive)
 	}
 }
+
+func TestEnsureAccountsRelogsWrongLogin(t *testing.T) {
+	r := newFakeRemote()
+	r.respond["list --json"] = run.Result{Stdout: `[{"name":"inbox3","email":"i3@x","loginEmail":"i2@x","loggedIn":true}]`}
+	s := newSetup(t, r)
+	s.pollEvery = time.Millisecond
+
+	if err := s.EnsureAccounts(context.Background(), []string{"inbox3"}, map[string]string{"inbox3": "i3@x"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(r.interactive) != 1 {
+		t.Fatalf("wrong login not redone: %v", r.interactive)
+	}
+}

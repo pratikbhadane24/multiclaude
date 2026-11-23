@@ -70,13 +70,17 @@ type Deps struct {
 // Run performs all checks in order. With fix=true it repairs missing and
 // replaced shared links and MCP drift; nothing else is ever modified.
 func Run(ctx context.Context, d Deps, fix bool) []Check {
-	out := globalChecks(d)
+	t3 := t3InUse(d)
+	out := globalChecks(d, t3)
 	for _, a := range d.Accounts {
 		if !a.IsMain() {
 			out = append(out, linkChecks(d, a, fix)...)
 			out = append(out, mcpCheck(d, a, fix))
 		}
-		out = append(out, keychainCheck(ctx, d, a), t3Check(d, a))
+		out = append(out, keychainCheck(ctx, d, a))
+		if t3 {
+			out = append(out, t3Check(d, a))
+		}
 	}
 	return append(out, duplicateChecks(ctx, d)...)
 }
@@ -96,7 +100,17 @@ func execProblem(d Deps, path string) string {
 	return ""
 }
 
-func globalChecks(d Deps) []Check {
+// t3InUse reports whether T3 Code is set up here (its CLI on PATH or its
+// settings file present); machines without it (workers) skip T3 checks.
+func t3InUse(d Deps) bool {
+	if _, err := d.LookPath(t3Binary); err == nil {
+		return true
+	}
+	_, err := d.Stat(d.Paths.T3Settings)
+	return err == nil
+}
+
+func globalChecks(d Deps, t3 bool) []Check {
 	const realName, shimName = "real claude", "shim"
 	var out []Check
 
@@ -111,6 +125,9 @@ func globalChecks(d Deps) []Check {
 
 	out = append(out, sameTargetCheck(d, realProblem == "" && shimProblem == ""))
 
+	if !t3 {
+		return out
+	}
 	if _, err := d.LookPath(t3Binary); err != nil {
 		out = append(out, Check{Name: "t3 on PATH", Status: StatusWarn, Detail: "t3 CLI not found on PATH"})
 	} else {

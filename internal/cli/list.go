@@ -43,16 +43,21 @@ func (a *App) cmdList(ctx context.Context, args []string) int {
 
 // listRow is one account in `ccm list --json` (no credentials).
 type listRow struct {
-	Name     string `json:"name"`
-	Email    string `json:"email"`
-	LoggedIn bool   `json:"loggedIn"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+	// LoginEmail is the email actually signed in ("" when logged out).
+	LoginEmail string `json:"loginEmail"`
+	LoggedIn   bool   `json:"loggedIn"`
 }
 
 func (a *App) listJSON(accts []registry.Account, results []loginResult) int {
 	rows := make([]listRow, len(accts))
 	for i, acct := range accts {
-		rows[i] = listRow{Name: acct.Name, Email: listEmail(acct, results[i]),
-			LoggedIn: results[i].err == nil && results[i].st.LoggedIn}
+		in := results[i].err == nil && results[i].st.LoggedIn
+		rows[i] = listRow{Name: acct.Name, Email: listEmail(acct, results[i]), LoggedIn: in}
+		if in {
+			rows[i].LoginEmail = results[i].st.Email
+		}
 	}
 	if err := json.NewEncoder(a.Out).Encode(rows); err != nil {
 		return a.errorf("write json: %v", err)

@@ -277,9 +277,16 @@ func (s *Setup) writeIfChanged(ctx context.Context, path string, cur, next []byt
 
 // ListEntry is one row of the worker's `ccm list --json`.
 type ListEntry struct {
-	Name     string `json:"name"`
-	Email    string `json:"email"`
-	LoggedIn bool   `json:"loggedIn"`
+	Name       string `json:"name"`
+	Email      string `json:"email"`
+	LoginEmail string `json:"loginEmail"`
+	LoggedIn   bool   `json:"loggedIn"`
+}
+
+// loggedInAs reports whether the entry is signed in as email. An entry
+// without loginEmail (older ccm) is trusted when logged in.
+func (e ListEntry) loggedInAs(email string) bool {
+	return e.LoggedIn && (e.LoginEmail == "" || strings.EqualFold(e.LoginEmail, email))
 }
 
 // RemoteAccounts returns the worker's accounts and their login state.
@@ -310,7 +317,7 @@ func (s *Setup) EnsureAccounts(ctx context.Context, names []string, emails map[s
 		return err
 	}
 	for _, name := range names {
-		if i := slices.IndexFunc(have, func(e ListEntry) bool { return e.Name == name }); i >= 0 && have[i].LoggedIn {
+		if i := slices.IndexFunc(have, func(e ListEntry) bool { return e.Name == name }); i >= 0 && have[i].loggedInAs(emails[name]) {
 			continue
 		}
 		fmt.Fprintf(s.Out, "→ log in %s on the worker: open the link it prints in the browser signed in to %s.\n"+

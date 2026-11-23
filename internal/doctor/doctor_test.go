@@ -253,3 +253,21 @@ func TestFixErrorIsFail(t *testing.T) {
 		t.Fatalf("code=%d %q", code, text)
 	}
 }
+
+func TestRunSkipsT3ChecksWhenT3NotSetUp(t *testing.T) {
+	d, _ := build(scenario{keychainOK: true, noT3: true}, []registry.Account{{Name: "main"}})
+	d.Paths.T3Settings = "/no/t3/settings.json"
+	stat := d.Stat
+	d.Stat = func(path string) (os.FileInfo, error) {
+		if path == d.Paths.T3Settings {
+			return nil, os.ErrNotExist
+		}
+		return stat(path)
+	}
+
+	for _, c := range Run(context.Background(), d, false) {
+		if strings.Contains(c.Name, "T3") || strings.Contains(c.Name, "t3") {
+			t.Fatalf("T3 check ran without T3: %+v", c)
+		}
+	}
+}

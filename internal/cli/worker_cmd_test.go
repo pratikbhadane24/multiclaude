@@ -100,3 +100,14 @@ func TestWorkerAddDuplicateAccountIsUsageError(t *testing.T) {
 		t.Fatalf("code=%d err=%s", code, e.err)
 	}
 }
+
+func TestListJSONHasLoginEmail(t *testing.T) {
+	e := newCLI(t, "")
+
+	if code := e.main("list", "--json"); code != ExitOK {
+		t.Fatalf("code=%d", code)
+	}
+	if !strings.Contains(e.out.String(), `"loginEmail"`) {
+		t.Fatalf("no loginEmail: %s", e.out)
+	}
+}
