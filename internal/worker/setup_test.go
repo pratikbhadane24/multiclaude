@@ -306,3 +306,16 @@ func TestPushSetupCopiesDefaultArgs(t *testing.T) {
 		t.Fatalf("scripts = %v", r.scripts)
 	}
 }
+
+func TestPushSetupClearsDefaultArgsWhenHubHasNone(t *testing.T) {
+	r := newFakeRemote()
+	s := newSetup(t, r)
+
+	if err := s.PushSetup(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if !slices.ContainsFunc(r.scripts, func(sc string) bool { return strings.Contains(sc, "config clear default-args") }) {
+		t.Fatalf("scripts = %v", r.scripts)
+	}
+}

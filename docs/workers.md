@@ -58,7 +58,7 @@ ccm worker sync --all  # after you change skills, plugins, settings or MCP serve
 ccm worker list
 ```
 
-On a worker, plain `claude` starts on the worker account with the most room, judged from cached usage. `ccm inbox2` or `ccm use inbox2` still picks an account explicitly.
+On a worker, plain `claude` starts on the worker account with the most room, judged from cached usage, and with your hub's default Claude args (`ccm config show`). `worker add/sync` copies those args to the worker. If they include `--dangerously-skip-permissions`, every plain `claude` on the worker runs without permission prompts, including ones started by scripts. `ccm inbox2` or `ccm use inbox2` still picks an account explicitly.
 
 ## Notes
 

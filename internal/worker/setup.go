@@ -216,15 +216,17 @@ func (s *Setup) PushSetup(ctx context.Context) error {
 	return s.pushDefaultArgs(ctx)
 }
 
-// pushDefaultArgs copies the hub's default claude args (e.g.
-// --dangerously-skip-permissions) to the worker's ccm config.
+// pushDefaultArgs makes the worker's default claude args (e.g.
+// --dangerously-skip-permissions) match the hub's, clearing them when the
+// hub has none.
 func (s *Setup) pushDefaultArgs(ctx context.Context) error {
 	cfg, err := config.Load(s.P)
 	if err != nil {
 		return fmt.Errorf("read hub ccm config: %w", err)
 	}
 	if len(cfg.DefaultArgs) == 0 {
-		return nil
+		// Keep the worker in step: args removed on the hub go away here too.
+		return s.runOK(ctx, remoteCCM+" config clear default-args")
 	}
 	quoted := make([]string, len(cfg.DefaultArgs))
 	for i, a := range cfg.DefaultArgs {
