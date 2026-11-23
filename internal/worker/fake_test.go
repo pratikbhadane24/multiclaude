@@ -34,6 +34,7 @@ type fakeRemote struct {
 	writes      []writeCall
 	// onScript, when set, answers scripts before respond (ok=false falls through).
 	onScript func(script string) (run.Result, bool)
+	tars     [][]string
 	forwards []int
 	stopped  []int
 }
@@ -100,5 +101,10 @@ func (f *fakeRemote) Read(_ context.Context, path string) ([]byte, bool, error) 
 func (f *fakeRemote) Write(_ context.Context, path string, data []byte, mode os.FileMode) error {
 	f.writes = append(f.writes, writeCall{path, mode})
 	f.files[path] = data
+	return nil
+}
+
+func (f *fakeRemote) Tar(_ context.Context, _ string, items []string, _ string, excludes []string) error {
+	f.tars = append(f.tars, append(append([]string(nil), items...), excludes...))
 	return nil
 }

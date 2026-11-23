@@ -75,8 +75,18 @@ func TestPushSetupNeverSendsHistoryOrCredentials(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(r.rsyncs) == 0 {
+	if len(r.rsyncs)+len(r.tars) == 0 {
 		t.Fatal("nothing pushed")
+	}
+	for _, tar := range r.tars {
+		for _, banned := range []string{"projects", "file-history", "todos", "plans", "settings.json"} {
+			if slices.Contains(tar, banned) {
+				t.Fatalf("tarred %s", banned)
+			}
+		}
+		if !slices.Contains(tar, ".credentials.json") {
+			t.Fatalf("tar lacks credentials exclude: %v", tar)
+		}
 	}
 	for _, c := range r.rsyncs {
 		base := filepath.Base(c.local)

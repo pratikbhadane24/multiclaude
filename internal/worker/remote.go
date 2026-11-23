@@ -20,6 +20,9 @@ type Remote interface {
 	Rsync(ctx context.Context, local, remoteDir string, excludes []string) error
 	Read(ctx context.Context, path string) ([]byte, bool, error)
 	Write(ctx context.Context, path string, data []byte, mode os.FileMode) error
+	// Tar streams items (relative to localParent) into remoteDir in one go;
+	// far faster than rsync for a first copy of many small files.
+	Tar(ctx context.Context, localParent string, items []string, remoteDir string, excludes []string) error
 	// Forward tunnels a local port to the same port on the worker.
 	Forward(ctx context.Context, port int) (stop func(), err error)
 }
@@ -137,4 +140,24 @@ func (s SSHRemote) check(ctx context.Context, name string, args []string) error 
 		return fmt.Errorf("%s to %s failed: %s", name, s.Host, strings.TrimSpace(res.Stderr))
 	}
 	return nil
+}
+
+// Tar pipes `tar -c` of items through ssh into `tar -x` in remoteDir.
+// Existing files are overwritten; nothing is deleted.
+func (s SSHRemote) Tar(ctx context.Context, localParent string, items []string, remoteDir string, excludes []string) error {
+	create := []string{"tar", "-C", shQuote(localParent), "-cf", "-"}
+	for _, e := range excludes {
+		create = append(create, "--exclude", shQuote(e))
+	}
+	for _, it := range items {
+		create = append(create, shQuote(it))
+	}
+	extract := []string{"ssh"}
+	for _, o := range sshOpts() {
+		extract = append(extract, shQuote(o))
+	}
+	dir := shQuote(remoteDir)
+	extract = append(extract, shQuote(s.Host), "mkdir", "-p", dir, "'&&'", "tar", "-C", dir, "-xf", "-")
+	pipeline := "set -o pipefail; " + strings.Join(create, " ") + " | " + strings.Join(extract, " ")
+	return s.check(ctx, "/bin/sh", []string{"-c", pipeline})
 }

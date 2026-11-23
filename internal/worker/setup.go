@@ -7,11 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -195,14 +197,8 @@ func (s *Setup) ShellBlocks(ctx context.Context) error {
 // PushSetup copies the hub's shared setup (never history or logins),
 // merges settings.json, writes the MCP source file and turns on auto-pick.
 func (s *Setup) PushSetup(ctx context.Context) error {
-	for _, item := range pushItems() {
-		local := filepath.Join(s.P.ClaudeDir, item)
-		if _, err := os.Stat(local); err != nil {
-			continue
-		}
-		if err := s.R.Rsync(ctx, local, remoteClaudeDir, pushExcludes); err != nil {
-			return err
-		}
+	if err := s.pushItems(ctx); err != nil {
+		return err
 	}
 	if err := s.pushSettings(ctx); err != nil {
 		return err
@@ -213,8 +209,80 @@ func (s *Setup) PushSetup(ctx context.Context) error {
 	return s.runOK(ctx, remoteCCM+" config set default-account best")
 }
 
-// pushItems are the shared items minus history and settings.json.
-func pushItems() []string {
+// pushItems sends each shared item that exists on the hub: in one tar
+// stream for items the worker mostly lacks (first push), else by rsync.
+func (s *Setup) pushItems(ctx context.Context) error {
+	var present []string
+	local := map[string]int{}
+	for _, item := range pushItemNames() {
+		n, err := countFiles(filepath.Join(s.P.ClaudeDir, item))
+		if err != nil {
+			continue
+		}
+		present = append(present, item)
+		local[item] = n
+	}
+	remote, err := s.remoteCounts(ctx, present)
+	if err != nil {
+		return err
+	}
+	var bulk []string
+	for _, item := range present {
+		if local[item] > 0 && remote[item]*2 < local[item] {
+			bulk = append(bulk, item)
+			continue
+		}
+		if err := s.R.Rsync(ctx, filepath.Join(s.P.ClaudeDir, item), remoteClaudeDir, pushExcludes); err != nil {
+			return err
+		}
+	}
+	if len(bulk) == 0 {
+		return nil
+	}
+	return s.R.Tar(ctx, s.P.ClaudeDir, bulk, remoteClaudeDir, pushExcludes)
+}
+
+// countFiles counts regular files under path (1 for a file).
+func countFiles(path string) (int, error) {
+	n := 0
+	err := filepath.WalkDir(path, func(_ string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.Type().IsRegular() {
+			n++
+		}
+		return nil
+	})
+	return n, err
+}
+
+// remoteCounts returns the number of files under each item on the worker.
+func (s *Setup) remoteCounts(ctx context.Context, items []string) (map[string]int, error) {
+	out := map[string]int{}
+	if len(items) == 0 {
+		return out, nil
+	}
+	quoted := make([]string, len(items))
+	for i, it := range items {
+		quoted[i] = shQuote(it)
+	}
+	script := "cd " + remoteClaudeDir + " 2>/dev/null || exit 0\nfor i in " + strings.Join(quoted, " ") +
+		`; do echo "$i=$(find "$i" -type f 2>/dev/null | wc -l | tr -d ' ')"; done`
+	res, err := s.R.Run(ctx, script)
+	if err != nil {
+		return nil, err
+	}
+	for k, v := range parseKV(res.Stdout) {
+		if n, err := strconv.Atoi(v); err == nil {
+			out[k] = n
+		}
+	}
+	return out, nil
+}
+
+// pushItemNames are the shared items minus history and settings.json.
+func pushItemNames() []string {
 	var out []string
 	for _, it := range consts.SharedItems {
 		if it == "settings.json" || slices.Contains(consts.HistoryItems, it) {
