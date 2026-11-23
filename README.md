@@ -51,7 +51,7 @@ If Chrome cannot be opened, ccm falls back to `copy`. Only Claude links are ever
 
 ## Dashboard
 
-Run `ccm` (or `ccm dash`) in a terminal. It shows each account with 5h and 7d usage bars, a combined row, today's tokens (`in/out` and `cache` separately) and a details pane. It refreshes every 30 seconds.
+Run `ccm` (or `ccm dash`) in a terminal. It shows each account with 5h and 7d usage bars, combined capacity left across accounts, today's tokens (`in/out` and `cache` separately) and a details pane. It refreshes every 30 seconds. Bars ease to their new values and a spinner runs while usage is being read; a resting dashboard draws nothing. Set `CCM_DASH_MOTION=0` to turn the animation off.
 
 | Key | Action |
 |---|---|

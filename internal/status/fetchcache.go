@@ -178,8 +178,11 @@ func fromCacheEntry(e CacheAccount, now time.Time) usage.AccountUsage {
 		au.State = usage.StateAPIError
 		return au
 	}
-	au.State, au.Usage = usage.StateOK, cachedUsage(e)
-	if e.LastError != "" {
+	// Windows that reset since the fetch are idle, not their old percentage;
+	// with none of the old numbers left the row is no longer stale.
+	u := cachedUsage(e).WithoutElapsed(now)
+	au.State, au.Usage = usage.StateOK, &u
+	if e.LastError != "" && u.HasWindowData() {
 		au.Stale, au.StaleFor = true, max(now.Sub(*e.FetchedAt), 0)
 	}
 	return au

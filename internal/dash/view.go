@@ -19,35 +19,76 @@ const (
 	sep          = " · "
 	// paneChrome is the number of lines around the doctor pane (title, blank, footer).
 	paneChrome = 3
+	// cardGaugeWidth is the capacity gauge width on a wide terminal.
+	cardGaugeWidth = 10
+	// Capacity left under these percentages turns its gauge yellow, then red.
+	halfLeftPct = 50.0
+	lowLeftPct  = 20.0
 )
 
 // View renders the whole screen, never wider or taller than the window.
 func (m Model) View() string {
+	footer := m.footerLines()
+	avail := m.height - len(footer)
 	var body []string
 	switch {
 	case m.mode == modeHelp:
-		body = []string{styleHeader.Render("Help") + styleDim.Render(sep+"↑↓ scroll · esc close"), "", m.pane.View()}
+		body = []string{m.paneTitle("Help"), "", m.pane.View()}
 	case m.mode == modeDoctor:
-		body = []string{styleHeader.Render("Doctor") + styleDim.Render(sep+"↑↓ scroll · esc close"), "", m.pane.View()}
+		body = []string{m.paneTitle("Doctor"), "", m.pane.View()}
 	case !m.loaded:
-		body = []string{styleHeader.Render("ccm") + sep + "loading accounts…"}
+		body = m.loadingLines(avail)
 	default:
-		body = m.mainLines()
+		body = m.mainLines(avail)
 	}
-	footer := m.footerLines()
-	body = fitHeight(body, m.height-len(footer))
+	body = fitHeight(body, avail)
 	return clip(strings.Join(append(body, footer...), "\n"), m.width)
 }
 
-func (m Model) mainLines() []string {
-	lines := append(m.headerLines(), "")
-	lines = append(lines, m.tableLines()...)
-	lines = append(lines, "")
-	lines = append(lines, m.detailLines()...)
-	return append(lines, "", m.statusLine())
+func (m Model) paneTitle(name string) string {
+	return m.logo() + styleDim.Render(sep) + styleHeader.Render(name) + styleDim.Render(sep+"↑↓ scroll · esc close")
 }
 
-// fitHeight drops lines above the status line (details first) to fit h.
+// loadingLines centers the first-load spinner in the free space.
+func (m Model) loadingLines(avail int) []string {
+	text := styleAccent.Render(m.fx.spinner()) + " " + m.logo() + styleDim.Render(sep+"loading accounts…")
+	if avail < 1 {
+		return []string{text}
+	}
+	return strings.Split(lipgloss.Place(m.width, avail, lipgloss.Center, lipgloss.Center, text), "\n")
+}
+
+// mainLines stacks header, accounts and details into avail lines. When they
+// do not fit it gives up, in order: the summary cards (they shrink to one
+// line), detail lines, then account rows (the list scrolls with the selection).
+func (m Model) mainLines(avail int) []string {
+	head := m.headerLines()
+	rows := len(m.snap.Rows)
+	fixed := func() int { return len(head) + 1 + tableChrome + 1 }
+	if fixed()+rows > avail {
+		head = []string{head[0], m.summaryLine()}
+	}
+	lo, hi := window(rows, m.selected, max(avail-fixed(), 1))
+	lines := append(slices.Clone(head), "")
+	lines = append(lines, panel(m.tableTitle(lo, hi), m.tableWindow(lo, hi), m.width)...)
+	if room := avail - fixed() - (hi - lo) - panelBorders; room > 0 {
+		details := m.detailLines()
+		lines = append(lines, panel(styleHeader.Render("Details"), details[:min(room, len(details))], m.width)...)
+	}
+	return append(lines, m.statusLine())
+}
+
+// tableTitle names the accounts panel and, when the list is scrolled, says
+// which rows are showing.
+func (m Model) tableTitle(lo, hi int) string {
+	title := styleHeader.Render("Accounts")
+	if n := len(m.snap.Rows); hi-lo < n {
+		title += styleDim.Render(fmt.Sprintf(" %d–%d of %d", lo+1, hi, n))
+	}
+	return title
+}
+
+// fitHeight drops lines above the status line to fit h.
 func fitHeight(lines []string, h int) []string {
 	if h <= 0 {
 		return nil
@@ -73,50 +114,113 @@ func (m Model) selectedArgs() []string {
 	return args
 }
 
-// headerLines is the summary line plus, when there is anything to show, a
-// second line with today's combined tokens and the selected account's badge.
-func (m Model) headerLines() []string {
-	c := m.snap.Combined
-	parts := []string{
-		styleHeader.Render("ccm"),
-		fmt.Sprintf("%d accounts", len(m.snap.Rows)),
-		"5h left " + leftText(c.FiveHourLeft, c.Counted),
-		"7d left " + leftText(c.SevenDayLeft, c.Counted),
+// logo is the product name; its colors cycle while the dashboard is busy.
+func (m Model) logo() string {
+	var b strings.Builder
+	for i, r := range "ccm" {
+		c := logoRamp[(i+m.fx.frame/spinnerEvery)%len(logoRamp)]
+		b.WriteString(lipgloss.NewStyle().Bold(true).Foreground(c).Render(string(r)))
 	}
-	if t := m.nextReset(); t != nil {
-		parts = append(parts, "next reset in "+status.FormatDuration(t.Sub(m.deps.Now())))
-	}
-	if m.loading {
-		parts = append(parts, styleDim.Render("refreshing…"))
-	}
-	var extra []string
-	if t := m.todayHeader(); t != "" {
-		extra = append(extra, t)
-	}
-	if slices.Contains(m.selectedArgs(), skipPermsArg) {
-		extra = append(extra, styleBadge.Render(badgeText))
-	}
-	if m.snap.AutoSwitch {
-		extra = append(extra, styleOK.Render(autoBadge))
-	}
-	lines := []string{strings.Join(parts, sep)}
-	if len(extra) > 0 {
-		lines = append(lines, strings.Join(extra, colGap))
-	}
-	return lines
+	return b.String()
 }
 
-// todayHeader is the combined today usage, or "" when none was provided.
-func (m Model) todayHeader() string {
+// headerLines is the title line (name, account count, badges, activity)
+// and, below a blank line, the summary cards.
+func (m Model) headerLines() []string {
+	parts := []string{styleAccent.Render("◆ ") + m.logo(), fmt.Sprintf("%d accounts", len(m.snap.Rows))}
+	if slices.Contains(m.selectedArgs(), skipPermsArg) {
+		parts = append(parts, styleBadge.Render(badgeText))
+	}
+	if m.snap.AutoSwitch {
+		parts = append(parts, styleOK.Render(autoBadge))
+	}
+	title := spread(strings.Join(parts, styleDim.Render(sep)), m.activity(), m.width)
+	return append([]string{title, ""}, cardLines(m.cards())...)
+}
+
+// activity is the right end of the title line: a spinner while usage is
+// being read, else a quiet "live" mark.
+func (m Model) activity() string {
+	if m.loading {
+		return styleAccent.Render(m.fx.spinner()) + styleDim.Render(" refreshing…")
+	}
+	return styleOK.Render("●") + styleDim.Render(" live")
+}
+
+// gaugeWidth is the width of the capacity gauges in the cards: none on a
+// terminal too narrow to keep every card whole.
+func (m Model) gaugeWidth() int {
+	switch {
+	case m.width >= wideWidth:
+		return cardGaugeWidth
+	case m.width >= defaultWidth:
+		return narrowBarWidth
+	}
+	return 0
+}
+
+// cards are the summary figures: capacity left in each window, the next
+// reset and, when there is any, today's combined tokens.
+func (m Model) cards() []card {
+	c := m.snap.Combined
+	out := []card{
+		{"5h left", m.leftValue(leftGauge(gaugeLeft5h, c.FiveHourLeft, c.Counted), c.FiveHourLeft, c.Counted)},
+		{"7d left", m.leftValue(leftGauge(gaugeLeft7d, c.SevenDayLeft, c.Counted), c.SevenDayLeft, c.Counted)},
+	}
+	if t := m.nextReset(); t != nil {
+		out = append(out, card{"next reset", styleBold.Render("in " + status.FormatDuration(t.Sub(m.deps.Now())))})
+	}
+	if t := m.todayValue(); t != "" {
+		out = append(out, card{"today", t})
+	}
+	return out
+}
+
+// summaryLine is the cards on one line, for a window too short for them.
+func (m Model) summaryLine() string {
+	c := m.snap.Combined
+	parts := []string{
+		styleDim.Render("5h left ") + styleBold.Render(leftText(c.FiveHourLeft, c.Counted)),
+		styleDim.Render("7d left ") + styleBold.Render(leftText(c.SevenDayLeft, c.Counted)),
+	}
+	if t := m.nextReset(); t != nil {
+		parts = append(parts, styleDim.Render("next reset ")+styleBold.Render("in "+status.FormatDuration(t.Sub(m.deps.Now()))))
+	}
+	if t := m.todayValue(); t != "" {
+		parts = append(parts, styleDim.Render("today ")+t)
+	}
+	return strings.Join(parts, styleDim.Render(sep))
+}
+
+// leftValue is a capacity card's value: a gauge of what is left (green,
+// yellow when under half, red when nearly gone) and the figure.
+func (m Model) leftValue(g gauge, left float64, counted int) string {
+	text := styleBold.Render(leftText(left, counted))
+	w := m.gaugeWidth()
+	if counted == 0 || w == 0 {
+		return text
+	}
+	color := colorOK
+	switch {
+	case g.target < lowLeftPct:
+		color = colorBad
+	case g.target < halfLeftPct:
+		color = colorWarn
+	}
+	return meter(m.fx.value(g), w, solid(color), plain) + " " + text
+}
+
+// todayValue is the combined today usage, or "" when none was provided.
+func (m Model) todayValue() string {
 	if m.snap.TodayErr != "" {
-		return "today " + styleBad.Render("err")
+		return styleBad.Render("err")
 	}
 	t := m.snap.Today
 	if emptyTokens(t) {
 		return ""
 	}
-	return "today " + status.FormatTokens(t.Input) + "/" + status.FormatTokens(t.Output) +
-		" cache " + status.FormatTokens(t.CacheRead+t.CacheWrite)
+	return styleBold.Render(status.FormatTokens(t.Input)+"/"+status.FormatTokens(t.Output)) +
+		styleDim.Render(" cache "+status.FormatTokens(t.CacheRead+t.CacheWrite))
 }
 
 func leftText(left float64, counted int) string {
@@ -156,6 +260,9 @@ func (m Model) statusLine() string {
 	if m.snap.Err != nil {
 		return styleBad.Render("error: " + m.snap.Err.Error())
 	}
+	if len(m.running) > 0 {
+		return styleAccent.Render(m.fx.spinner()) + " " + styleDim.Render(m.toast)
+	}
 	return styleDim.Render(m.toast)
 }
 
@@ -163,7 +270,7 @@ func (m Model) statusLine() string {
 func (m Model) footerLines() []string {
 	hints := make([]string, 0, len(keyHelp))
 	for _, k := range keyHelp {
-		hints = append(hints, styleKey.Render(k.key)+" "+k.label)
+		hints = append(hints, styleKey.Render(k.key)+" "+styleDim.Render(k.label))
 	}
 	switch m.mode {
 	case modeDoctor, modeHelp:

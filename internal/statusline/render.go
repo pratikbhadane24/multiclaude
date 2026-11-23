@@ -74,18 +74,16 @@ func Account(p paths.Paths, configDir string) string {
 	return filepath.Base(dir)
 }
 
-// segment renders one window. A nil window (or 0% with no reset) on a usable account is idle; a
-// window that already reset since the cache was written is unknown ("?"), not
-// the stale percentage. >=95% is marked low, >=100% limited.
-func segment(label string, used *float64, resets *time.Time, usable bool, now time.Time) string {
-	if used == nil || (*used == 0 && resets == nil) {
+// segment renders one window. A nil window (or 0% with no reset) on a usable
+// account is idle, and so is a window that already reset since the cache was
+// written. live reports whether the text shows a cached percentage.
+func segment(label string, used *float64, resets *time.Time, usable bool, now time.Time) (text string, live bool) {
+	elapsed := resets != nil && !now.Before(*resets)
+	if used == nil || (*used == 0 && resets == nil) || elapsed {
 		if usable {
-			return label + " idle"
+			return label + " idle", false
 		}
-		return ""
-	}
-	if resets != nil && resets.Before(now) {
-		return label + " ?"
+		return "", false
 	}
 	s := fmt.Sprintf("%s %.0f%%", label, *used)
 	switch {
@@ -94,7 +92,7 @@ func segment(label string, used *float64, resets *time.Time, usable bool, now ti
 	case *used >= status.LowPct:
 		s += " " + lowMark
 	}
-	return s
+	return s, true
 }
 
 // isUsable reports whether a cached state carries real usage numbers.
@@ -115,11 +113,10 @@ func ccmPart(name string, c *status.CacheAccount, now time.Time) string {
 		return out + " (logged out)"
 	}
 	usable := isUsable(c.State)
+	five, live5 := segment("5h", c.FiveHourUsed, c.FiveHourResetsAt, usable, now)
+	seven, live7 := segment("7d", c.SevenDayUsed, c.SevenDayResetsAt, usable, now)
 	var segs []string
-	for _, s := range []string{
-		segment("5h", c.FiveHourUsed, c.FiveHourResetsAt, usable, now),
-		segment("7d", c.SevenDayUsed, c.SevenDayResetsAt, usable, now),
-	} {
+	for _, s := range []string{five, seven} {
 		if s != "" {
 			segs = append(segs, s)
 		}
@@ -128,7 +125,8 @@ func ccmPart(name string, c *status.CacheAccount, now time.Time) string {
 		return out
 	}
 	out += " " + strings.Join(segs, " · ")
-	if c.Stale {
+	// Only cached numbers can be out of date; idle windows carry none.
+	if c.Stale && (live5 || live7) {
 		out += " " + staleMark
 	}
 	return out

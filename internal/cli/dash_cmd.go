@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/term"
 
 	"multiclaude/internal/config"
@@ -22,6 +23,9 @@ import (
 
 // demoEnv, when "1", makes the dashboard show canned data (screenshots, smoke tests).
 const demoEnv = "CCM_DASH_DEMO"
+
+// motionEnv, when "0", turns the dashboard's animations off.
+const motionEnv = "CCM_DASH_MOTION"
 
 // isTerminal reports whether v is an *os.File attached to a terminal.
 func isTerminal(v any) bool {
@@ -49,6 +53,11 @@ func (a *App) cmdDash(ctx context.Context, args []string) int {
 	if os.Getenv(demoEnv) == "1" {
 		deps = dashboard.Demo(deps)
 	}
+	deps.Motion = os.Getenv(motionEnv) != "0"
+	// The dashboard's colors adapt to a light or dark terminal. Ask the
+	// terminal now: once Bubble Tea owns the input it would swallow the
+	// answer and the first frame would wait for a reply that never comes.
+	lipgloss.HasDarkBackground()
 	p := tea.NewProgram(dashboard.New(ctx, deps), tea.WithAltScreen(), tea.WithInput(a.In), tea.WithOutput(a.Out))
 	if _, err := p.Run(); err != nil && !errors.Is(err, tea.ErrProgramKilled) && !errors.Is(err, tea.ErrInterrupted) {
 		return a.errorf("dash: %v", err)

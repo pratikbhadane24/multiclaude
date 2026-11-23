@@ -19,7 +19,7 @@ func TestViewSnapshotTwoAccounts(t *testing.T) {
 	for _, want := range []string{
 		"ccm · 2 accounts", "5h left", "7d left",
 		"main", "work", "m@x.com", "w@x.com",
-		"██", "25%", "10%",
+		"━━", "25%", "10%",
 		"⚠ skip-permissions",
 		"today (all accounts)",
 		"⏎ launch", "b best", "n new window", "l login", "a add", "d doctor",

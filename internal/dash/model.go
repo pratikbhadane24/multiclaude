@@ -72,6 +72,9 @@ type Model struct {
 	// shown as soon as the list is visible, until handoffUntil.
 	handoffReady bool
 	handoffUntil time.Time
+
+	// fx is the animation state (spinner frame, bars easing to new values).
+	fx motion
 }
 
 // New returns a dashboard model; ctx bounds in-process work.
@@ -96,11 +99,11 @@ func (m Model) Init() tea.Cmd {
 }
 
 // Update handles one message, then shows a pending handoff offer if the list
-// is visible.
+// is visible and keeps the animation running while anything moves.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	next, cmd := m.step(msg)
 	if nm, ok := next.(Model); ok {
-		return nm.offerHandoff(), cmd
+		return nm.offerHandoff().animate(cmd)
 	}
 	return next, cmd
 }
@@ -117,6 +120,9 @@ func (m Model) step(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.withSnapshot(msg).afterSnapshot(msg)
 	case tickMsg:
 		return m.onTick()
+	case frameMsg:
+		m.fx = m.fx.advance()
+		return m, nil
 	case execDoneMsg:
 		return m.onExecDone(msg)
 	case doctorMsg:
@@ -187,6 +193,7 @@ func (m Model) withSnapshot(msg snapshotMsg) Model {
 		return m.withToast("refresh failed: " + msg.snap.Err.Error())
 	}
 	name := m.selectedName()
+	m = m.retargeted(len(msg.snap.Rows))
 	m.snap, m.loaded, m.lastRefresh = msg.snap, true, msg.at
 	m.args = m.loadArgs(msg.snap.Rows)
 	m.selected = 0

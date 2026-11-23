@@ -122,7 +122,7 @@ func TestHeaderShowsCombinedToday(t *testing.T) {
 	snap.Today = tokens.Tokens{Input: 5000, Output: 6000, CacheRead: 70_000}
 	m = update(t, m, snapshotMsg{snap: snap, at: testNow})
 
-	if h := strings.Join(m.headerLines(), "\n"); !strings.Contains(h, "today 5.0k/6.0k") || !strings.Contains(h, "cache 70.0k") {
+	if h := strings.Join(m.headerLines(), "\n"); !strings.Contains(h, "today") || !strings.Contains(h, "5.0k/6.0k cache 70.0k") {
 		t.Fatalf("header=%q", h)
 	}
 	m = update(t, m, snapshotMsg{snap: r.snap, at: testNow})

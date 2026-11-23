@@ -56,11 +56,11 @@ func (m Model) detailLines() []string {
 	title := []string{styleHeader.Render(r.Account), r.Email, r.Plan, m.accountDir(r.Account)}
 	return []string{
 		joinNonEmpty(title),
-		"state " + st.Render(state) + sep + styleDim.Render("refreshed "+age(now, m.lastRefresh)+" ago"),
-		"5h " + windowText(status.Window5h(r, now), resetAt(r, true), now) + sep + "7d " + windowText(status.Window7d(r, now), resetAt(r, false), now),
+		styleDim.Render("state ") + st.Render(state) + sep + styleDim.Render("refreshed "+age(now, m.lastRefresh)+" ago"),
+		styleDim.Render("5h ") + windowText(status.Window5h(r, now), resetAt(r, true), now) + styleDim.Render(sep+"7d ") + windowText(status.Window7d(r, now), resetAt(r, false), now),
 		m.todayDetail(),
 		m.argsLine(r.Account),
-		"health " + m.healthText(r.Account),
+		styleDim.Render("health ") + m.healthText(r.Account),
 	}
 }
 
@@ -98,7 +98,7 @@ func (m Model) argsLine(name string) string {
 	if err != nil {
 		return styleBad.Render(argsConfigError)
 	}
-	return "launch args " + argsText(args)
+	return styleDim.Render("launch args ") + argsText(args)
 }
 
 // todayDetail is today's combined token use: history is shared by every
@@ -106,10 +106,10 @@ func (m Model) argsLine(name string) string {
 func (m Model) todayDetail() string {
 	const label = "today (all accounts) "
 	if m.snap.TodayErr != "" {
-		return label + styleBad.Render("error: "+m.snap.TodayErr)
+		return styleDim.Render(label) + styleBad.Render("error: "+m.snap.TodayErr)
 	}
 	t := m.snap.Today
-	return label + "in " + status.FormatTokens(t.Input) + sep + "out " + status.FormatTokens(t.Output) +
+	return styleDim.Render(label) + "in " + status.FormatTokens(t.Input) + sep + "out " + status.FormatTokens(t.Output) +
 		sep + "cache read " + status.FormatTokens(t.CacheRead) + sep + "cache write " + status.FormatTokens(t.CacheWrite)
 }
 

@@ -236,7 +236,7 @@ func TestRenderIsCacheOnlyAndFast(t *testing.T) {
 	}
 }
 
-func TestRenderWindowPastResetShowsQuestionMark(t *testing.T) {
+func TestRenderWindowPastResetShowsIdle(t *testing.T) {
 	past, future := now.Add(-time.Minute), now.Add(time.Hour)
 	c := freshCache()
 	c.Accounts[1].FiveHourResetsAt, c.Accounts[1].SevenDayResetsAt = &past, &future
@@ -245,7 +245,7 @@ func TestRenderWindowPastResetShowsQuestionMark(t *testing.T) {
 
 	got := h.render(t, "{}", work)
 
-	if got != "ccm: work 5h ? · 7d 30%\n" {
+	if got != "ccm: work 5h idle · 7d 30%\n" {
 		t.Fatalf("got %q", got)
 	}
 }

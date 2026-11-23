@@ -35,7 +35,7 @@ func TestBarIdleIsEmptyWithIdleText(t *testing.T) {
 
 	got := bar(status.Window5h(r, testNow), 8)
 
-	if got != "░░░░░░░░ idle" {
+	if got != "──────── idle" {
 		t.Fatalf("bar=%q", got)
 	}
 }

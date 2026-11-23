@@ -79,6 +79,9 @@ type Deps struct {
 	// Tick schedules a timer message (tea.Tick in production).
 	Tick     func(d time.Duration, fn func(time.Time) tea.Msg) tea.Cmd
 	Interval time.Duration
+	// Motion animates the screen (spinners, bars easing to new values); off,
+	// every frame is drawn at rest.
+	Motion bool
 	// ShowDuplicates lists accounts that share a login as their own rows
 	// (toggled with A).
 	ShowDuplicates bool
