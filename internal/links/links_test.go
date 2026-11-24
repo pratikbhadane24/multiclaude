@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pratikbhadane24/multiclaude/internal/consts"
 	"github.com/pratikbhadane24/multiclaude/internal/paths"
 )
 
@@ -53,7 +54,7 @@ func TestLinkMissingLinksOnlyExistingSourcesAndIsIdempotent(t *testing.T) {
 	write(t, filepath.Join(p.ClaudeDir, "rules", "a.md"), "r")
 
 	got, err := LinkMissing(p, acc)
-	if err != nil || len(got) != 2 {
+	if err != nil || len(got) != 2+len(consts.HistoryItems) {
 		t.Fatalf("got %v err %v", got, err)
 	}
 	dest, err := os.Readlink(filepath.Join(acc, "CLAUDE.md"))
@@ -219,5 +220,37 @@ func TestFixReplacedRejectsNonReplacedItems(t *testing.T) {
 	}
 	if d, _ := os.Readlink(filepath.Join(acc, "keybindings.json")); d != "/nowhere" {
 		t.Fatal("symlink changed")
+	}
+}
+
+// History must be shared even before main has any: otherwise each account
+// grows its own projects dir and a resume on another account finds nothing.
+func TestLinkMissingCreatesAbsentHistorySources(t *testing.T) {
+	p, acc := setup(t)
+
+	if _, err := LinkMissing(p, acc); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, item := range consts.HistoryItems {
+		src := filepath.Join(p.ClaudeDir, item)
+		if fi, err := os.Stat(src); err != nil || !fi.IsDir() {
+			t.Fatalf("%s: want shared dir created in main, got %v", item, err)
+		}
+		if stateOf(t, p, acc, item) != StateOK {
+			t.Errorf("%s: want linked", item)
+		}
+	}
+}
+
+func TestInspectReportsAccountHistoryAsReplacedWhenMainHasNone(t *testing.T) {
+	p, acc := setup(t)
+	write(t, filepath.Join(acc, "projects", "-x", "s.jsonl"), "{}")
+
+	if got := stateOf(t, p, acc, "projects"); got != StateReplaced {
+		t.Fatalf("got %s want %s", got, StateReplaced)
+	}
+	if got := stateOf(t, p, acc, "todos"); got != StateMissing {
+		t.Fatalf("todos: got %s want %s", got, StateMissing)
 	}
 }

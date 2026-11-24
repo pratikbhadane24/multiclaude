@@ -1,6 +1,8 @@
 // Package links manages the symlinks from an account dir back to the shared
-// items in ~/.claude. It never writes inside ClaudeDir and never deletes
-// account data that differs from the source (it renames it to a backup).
+// items in ~/.claude. It never deletes account data that differs from the
+// source (it renames it to a backup). The only write inside ClaudeDir is
+// creating an empty history dir (consts.HistoryItems) that main lacks:
+// history is always shared, so it must exist before the first chat.
 package links
 
 import (
@@ -10,6 +12,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"time"
 
@@ -32,6 +35,7 @@ const (
 	ActionRelinkedIdentical  = "relinked-identical"
 	ActionRelinkedWithBackup = "relinked-with-backup"
 	backupInfix              = ".ccm-backup-"
+	historyDirMode           = 0o700
 )
 
 // Item is the inspected state of a single shared item.
@@ -50,10 +54,13 @@ func inspectOne(p paths.Paths, accountDir, name string) (State, error) {
 	src := filepath.Join(p.ClaudeDir, name)
 	dst := filepath.Join(accountDir, name)
 	if _, err := os.Lstat(src); err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
+		if !errors.Is(err, fs.ErrNotExist) {
+			return "", fmt.Errorf("stat source %s: %w", src, err)
+		}
+		if !isHistoryItem(name) {
 			return StateNoSource, nil
 		}
-		return "", fmt.Errorf("stat source %s: %w", src, err)
+		// A history source absent from main is created on link.
 	}
 	fi, err := os.Lstat(dst)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -101,6 +108,11 @@ func LinkMissing(p paths.Paths, accountDir string) ([]string, error) {
 			continue
 		}
 		src := filepath.Join(p.ClaudeDir, it.Name)
+		if isHistoryItem(it.Name) {
+			if err := os.MkdirAll(src, historyDirMode); err != nil {
+				return linked, fmt.Errorf("create shared %s: %w", it.Name, err)
+			}
+		}
 		if err := os.Symlink(src, filepath.Join(accountDir, it.Name)); err != nil {
 			return linked, fmt.Errorf("link %s: %w", it.Name, err)
 		}
@@ -132,6 +144,10 @@ func FixReplaced(p paths.Paths, accountDir, item string, now time.Time) (FixResu
 		return relinkIdentical(src, dst)
 	}
 	return relinkWithBackup(src, dst, now)
+}
+
+func isHistoryItem(item string) bool {
+	return slices.Contains(consts.HistoryItems, item)
 }
 
 func isSharedItem(item string) bool {
