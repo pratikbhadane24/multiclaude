@@ -4,6 +4,8 @@ Notable changes to multiclaude. The format follows [Keep a Changelog](https://ke
 
 ## Unreleased
 
+## v0.2.0 - 2026-11-24
+
 ### Added
 
 - `ccm worker add|sync|status|list`: set up other Macs as workers over SSH and keep them in step (for Orca SSH hosts).
