@@ -25,7 +25,13 @@ Run `ccm` (or `ccm dash`) in a terminal. It shows each account with 5h and 7d us
 | State | Meaning |
 |---|---|
 | `ok` | Normal. |
-| `idle` | Nothing used in that window (shows 0% used, 100% left). Common on Max accounts. |
+| `idle` | Nothing used in the 5h window yet (shows 0% used, 100% left). |
+
+A Max account that reports no 5h window shows `—` and `no limit` in 5H RESET instead of `idle`.
+
+**7D RESET** shows when the weekly window resets; it is gold when quota is still left and it resets within 24h (use it or lose it).
+
+**★ best** marks the account `b` would launch. The Details panel says why, e.g. `★ best main · 36% weekly left, resets in 16h38m`. See [how the best account is chosen](auto-switch.md#how-the-account-is-chosen).
 | `low (5h)` / `low (7d)` | Yellow: 95% or more used, not yet full. |
 | `limited (5h)` / `limited (7d)` | 100% used. Wait for the reset or switch account. |
 | `logged out` | Needs `ccm login <name>`. |

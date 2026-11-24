@@ -20,6 +20,8 @@ const (
 	wideWidth = 100
 	fullPct   = 100.0
 	idleText  = "idle"
+	// noLimitBar replaces the percentage of a window the plan does not have.
+	noLimitBar = "—"
 	// A bar is heavy filled cells, an optional half cell, then a light track,
 	// so it still reads without color.
 	barFull   = "━"
@@ -149,7 +151,10 @@ func barShown(v status.WindowView, w int, shown float64, base lipgloss.Style) st
 	text, color := v.Used, rampColor
 	if _, ok := usedFraction(v); !ok {
 		shown = 0
-		if v.Idle {
+		switch {
+		case v.NoLimit:
+			text = noLimitBar
+		case v.Idle:
 			text = idleText
 		}
 	}
@@ -179,7 +184,7 @@ func stateTone(r status.Row) (string, tone) {
 		return label, toneBad
 	case strings.HasPrefix(label, "low"), label == "logged out":
 		return label, toneWarn
-	case label == "ok" && status.Window5h(r, time.Time{}).Idle:
+	case label == "ok" && idleFiveHour(r):
 		return idleText, toneDim
 	}
 	return label, toneOK
@@ -219,4 +224,11 @@ func padOn(s string, w int, base lipgloss.Style) string {
 		s += base.Render(strings.Repeat(" ", gap))
 	}
 	return s
+}
+
+// idleFiveHour reports an account with no five-hour window running (a plan
+// without one is not idle).
+func idleFiveHour(r status.Row) bool {
+	v := status.Window5h(r, time.Time{})
+	return v.Idle && !v.NoLimit
 }

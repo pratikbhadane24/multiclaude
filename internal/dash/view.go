@@ -333,13 +333,18 @@ var helpExplain = []string{
 
 // bestName is the account `b` would launch, or "".
 func (m Model) bestName() string {
-	list := make([]usage.AccountUsage, len(m.snap.Rows))
-	for i, r := range m.snap.Rows {
-		list[i] = r.AccountUsage
-	}
-	best, ok := status.PickBest(list)
+	best, _, ok := m.bestScored()
 	if !ok {
 		return ""
 	}
 	return best.Account
+}
+
+// bestScored is the account `b` would launch and why.
+func (m Model) bestScored() (usage.AccountUsage, status.Score, bool) {
+	list := make([]usage.AccountUsage, len(m.snap.Rows))
+	for i, r := range m.snap.Rows {
+		list[i] = r.AccountUsage
+	}
+	return status.PickBestScored(list, m.deps.Now())
 }

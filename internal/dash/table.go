@@ -21,9 +21,11 @@ const (
 	// barColSuffix is the room for " 100%" after a bar.
 	barColSuffix = 5
 	resetWidth   = 8
-	stateWidth   = 18
-	markerText   = "▌ "
-	bestText     = "★"
+	// weekSoon is how close a weekly reset must be to show it as "use it".
+	weekSoon   = 24 * time.Hour
+	stateWidth = 18
+	markerText = "▌ "
+	bestText   = "★"
 	// tableChrome is the lines the accounts panel adds to its rows (two
 	// borders and the column titles).
 	tableChrome = panelBorders + 1
@@ -91,6 +93,7 @@ func (m Model) columns() []column {
 		{"5H USED", m.barWidth() + barColSuffix, 1, pctCell(gauge5h, status.Window5h)},
 		{"7D USED", m.barWidth() + barColSuffix, 2, pctCell(gauge7d, status.Window7d)},
 		{"5H RESET", resetWidth, 4, textCell(resetCell)},
+		{"7D RESET", resetWidth, 6, textCell(weekResetCell)},
 		{"STATE", stateWidth, 3, stateCell},
 	}
 }
@@ -134,6 +137,26 @@ func resetCell(r status.Row, m Model) (string, lipgloss.Style) {
 		return v.Reset, styleDim
 	}
 	return v.Reset, plain
+}
+
+// weekResetCell is the weekly reset, in gold when quota is still left and it
+// expires within weekSoon (use it or lose it).
+func weekResetCell(r status.Row, m Model) (string, lipgloss.Style) {
+	now := m.deps.Now()
+	v := status.Window7d(r, now)
+	switch {
+	case v.Idle || v.Reset == naText:
+		return v.Reset, styleDim
+	case !v.Limited && weekExpiresSoon(r, now):
+		return v.Reset, styleGold
+	}
+	return v.Reset, plain
+}
+
+// weekExpiresSoon reports whether r's weekly window resets within weekSoon.
+func weekExpiresSoon(r status.Row, now time.Time) bool {
+	at := resetAt(r, false)
+	return at != nil && at.After(now) && at.Sub(now) <= weekSoon
 }
 
 // fitColumns keeps columns in priority order until the next one would not

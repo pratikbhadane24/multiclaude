@@ -192,7 +192,7 @@ func (a *App) continueTarget(accts []registry.Account, list []usage.AccountUsage
 			others = append(others, u)
 		}
 	}
-	best, found := status.PickBest(others)
+	best, found := status.PickBest(others, a.Now())
 	if !found {
 		fmt.Fprintln(a.Err, "ccm: no free account to continue on")
 		return registry.Account{}, exitAllLimited, false

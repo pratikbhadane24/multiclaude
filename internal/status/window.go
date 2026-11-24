@@ -12,18 +12,22 @@ const (
 	// LowPct is the used percentage from which a window is "low" (still usable).
 	LowPct = 95.0
 
-	idleText  = "idle"
-	label5h   = "5h"
-	label7d   = "7d"
-	stateOKTx = "ok"
+	idleText = "idle"
+	// NoLimitText is the reset text of a window the plan does not have.
+	NoLimitText = "no limit"
+	planMax     = "max"
+	label5h     = "5h"
+	label7d     = "7d"
+	stateOKTx   = "ok"
 )
 
 // WindowView is one rate-limit window prepared for display. Idle means the
 // API reported no window (nothing used yet); Low is >=95% and <100% used;
-// Limited is >=100% used.
+// Limited is >=100% used. NoLimit marks a five-hour window the plan does not
+// have (Max reports none): shown as "no limit", never as idle.
 type WindowView struct {
-	Used, Left, Reset  string
-	Idle, Low, Limited bool
+	Used, Left, Reset           string
+	Idle, Low, Limited, NoLimit bool
 }
 
 func countableRow(r Row) bool {
@@ -59,7 +63,11 @@ func Window5h(r Row, now time.Time) WindowView {
 	if r.Usage != nil {
 		w = r.Usage.FiveHour
 	}
-	return buildView(r, w, now)
+	v := buildView(r, w, now)
+	if v.Idle && w.UsedPct == nil && r.Plan == planMax {
+		v.Reset, v.NoLimit = NoLimitText, true
+	}
+	return v
 }
 
 // Window7d is the row's seven-day window as display text and flags.

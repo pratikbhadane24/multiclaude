@@ -132,12 +132,12 @@ func TestRenderJSONNoSecrets(t *testing.T) {
 }
 
 func TestPickBest(t *testing.T) {
-	list := []usage.AccountUsage{ok("a", f(90), f(20), nil), ok("b", f(30), f(60), nil), ok("c", f(100), nil, nil)}
-	got, found := PickBest(list)
+	list := []usage.AccountUsage{ok("a", f(95), f(20), nil), ok("b", f(30), f(60), nil), ok("c", f(100), nil, nil)}
+	got, found := PickBest(list, now)
 	if !found || got.Account != "b" {
 		t.Fatalf("%v %v", got, found)
 	}
-	_, found = PickBest([]usage.AccountUsage{ok("c", f(100), f(5), nil), {Account: "d", State: usage.StateAPIError}})
+	_, found = PickBest([]usage.AccountUsage{ok("c", f(100), f(5), nil), {Account: "d", State: usage.StateAPIError}}, now)
 	if found {
 		t.Fatal("expected none")
 	}
@@ -188,11 +188,11 @@ func TestCollectNilTodayInspect(t *testing.T) {
 func TestPickBestExpiredRefreshedAndTie(t *testing.T) {
 	r := ok("r", f(50), f(50), nil)
 	r.State = usage.StateExpiredRefreshed
-	got, found := PickBest([]usage.AccountUsage{ok("a", f(60), f(10), nil), r})
+	got, found := PickBest([]usage.AccountUsage{ok("a", f(60), f(60), nil), r}, now)
 	if !found || got.Account != "r" {
 		t.Fatalf("expired-refreshed %v %v", got, found)
 	}
-	got, _ = PickBest([]usage.AccountUsage{ok("first", f(50), f(50), nil), ok("second", f(50), f(50), nil)})
+	got, _ = PickBest([]usage.AccountUsage{ok("first", f(50), f(50), nil), ok("second", f(50), f(50), nil)}, now)
 	if got.Account != "first" {
 		t.Fatalf("tie %v", got.Account)
 	}

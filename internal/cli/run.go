@@ -61,13 +61,13 @@ func (a *App) cmdBest(ctx context.Context, args []string) int {
 	for i, r := range rows {
 		list[i] = r.AccountUsage
 	}
-	best, ok := status.PickBest(list)
+	best, score, ok := status.PickBestScored(list, a.Now())
 	if !ok {
 		return a.noBest(combined)
 	}
 	acct, _ := registry.Find(accts, best.Account)
-	fmt.Fprintf(a.Err, "ccm: using %s (5h %s used, 7d %s used)\n", acct.Name,
-		status.FormatPct(best.Usage.FiveHour.UsedPct), status.FormatPct(best.Usage.SevenDay.UsedPct))
+	fmt.Fprintf(a.Err, "ccm: using %s (5h %s used, 7d %s used; %s)\n", acct.Name,
+		status.FormatPct(best.Usage.FiveHour.UsedPct), status.FormatPct(best.Usage.SevenDay.UsedPct), score.Reason())
 	return a.runAccount(ctx, acct, args)
 }
 

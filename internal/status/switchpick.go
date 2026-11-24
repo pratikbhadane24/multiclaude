@@ -107,27 +107,20 @@ func earlier(cur, t *time.Time) *time.Time {
 	return cur
 }
 
-// freeHeadroom is the smaller remaining percentage of the 5h and 7d windows,
-// counting a reset window as fully free; unknown usage scores -1 (usable, but
-// ranked after every account with known headroom).
-func freeHeadroom(e CacheAccount, known bool, now time.Time) float64 {
-	if !known {
-		return -1
+// cacheScore scores a cached account at now; accounts with no cached usage
+// get unknownScore (usable, ranked last).
+func cacheScore(e CacheAccount, now time.Time) (Score, bool) {
+	if !hasUsage(e) {
+		return unknownScore(), true
 	}
-	return min(windowLeftAt(e.FiveHourUsed, e.FiveHourResetsAt, now),
-		windowLeftAt(e.SevenDayUsed, e.SevenDayResetsAt, now))
+	five := usage.Window{UsedPct: e.FiveHourUsed, ResetsAt: e.FiveHourResetsAt}
+	week := usage.Window{UsedPct: e.SevenDayUsed, ResetsAt: e.SevenDayResetsAt}
+	return ScoreWindows(five, week, now)
 }
 
 // hasUsage reports whether e carries usage numbers (fetched, or marked).
 func hasUsage(e CacheAccount) bool {
 	return e.hasLastGood() || e.FiveHourUsed != nil || e.SevenDayUsed != nil
-}
-
-func windowLeftAt(used *float64, resets *time.Time, now time.Time) float64 {
-	if used == nil || (resets != nil && !now.Before(*resets)) {
-		return fullPct
-	}
-	return fullPct - *used
 }
 
 // SwitchChoice is the outcome of PickSwitch: the account to continue on, or
@@ -143,14 +136,14 @@ type SwitchChoice struct {
 // accounts limited in the cache, and every login listed in avoid (name ->
 // limited until) while that time is in the future, together with any account
 // signed in as the same login. Duplicate logins are considered once. The
-// most headroom wins; accounts with no cached usage rank last; ties keep
-// registry order.
+// best Score wins (weekly quota expiring soonest first); accounts with no
+// cached usage rank last; ties keep registry order.
 func PickSwitch(accts []registry.Account, c Cache, avoid map[string]time.Time, now time.Time) SwitchChoice {
 	entries := indexByName(c.Accounts)
 	list := loginRows(accts, entries)
 	canon := usage.CanonicalIndex(list)
 	blocked, wait := avoidedLogins(accts, canon, avoid, now)
-	choice, best := SwitchChoice{}, 0.0
+	choice, best := SwitchChoice{}, Score{}
 	for i, a := range accts {
 		if canon[i] != i || blocked[i] || list[i].State == usage.StateLoggedOut {
 			continue
@@ -160,8 +153,11 @@ func PickSwitch(accts []registry.Account, c Cache, avoid map[string]time.Time, n
 			wait = earlier(wait, until)
 			continue
 		}
-		score := freeHeadroom(e, hasUsage(e), now)
-		if !choice.Found || score > best {
+		score, ok := cacheScore(e, now)
+		if !ok {
+			continue
+		}
+		if !choice.Found || score.Better(best) {
 			choice, best = SwitchChoice{Account: a, Found: true}, score
 		}
 	}

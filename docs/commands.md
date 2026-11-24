@@ -7,7 +7,7 @@
 | `ccm login <name> [--open mode]` / `ccm login --all` | (Re)login and verify the email. `--all` cannot be combined with `--open`. |
 | `ccm list [--json]` | Table: `NAME  DIR  EMAIL  PLAN  LOGGED IN`. `--json` prints name, email and login state. |
 | `ccm run <name> [claude args]` / `ccm <name> [claude args]` | Run Claude as that account. Exit code is the child's. |
-| `ccm best [claude args]` | Run on the account with the most headroom; prints the pick to stderr. Exit 2 if all are limited. |
+| `ccm best [claude args]` | Run on the [best account](auto-switch.md#how-the-account-is-chosen) (weekly quota expiring soonest first); prints the pick to stderr. Exit 2 if all are limited. |
 | `ccm use <name>` | Print shell code that switches this shell to the account (needs the `shell-init` wrapper). Sets `CCM_ACCOUNT`. |
 | `ccm continue [--from a] [--to b] [--session id]` | Resume this folder's latest chat on another account. `--from` defaults to `$CCM_ACCOUNT`, else the most limited; `--to` to the account with most headroom. Never picks a chat that is still open in another window (exit 1 if that is the only one; pass `--session`). The `--to` account must be a different login than `--from`. Exit 2 if none free, 1 if no chat. |
 | `ccm status [--json] [--all] [--refresh] [--watch [d]]` | Per-account 5h/7d used, left, reset; `TODAY TOK`; `STATE`; plus an `ALL` row. `--watch` default `30s`. `--all` also lists accounts that share a login as separate rows (`same as <name>`). `--json` and `--watch` cannot be combined. `--refresh` reads usage now instead of reusing a result under 3 minutes old. `--refresh-cache` updates the status-line cache. |

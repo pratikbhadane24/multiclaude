@@ -12,13 +12,25 @@ import (
 )
 
 func TestWindowViewIdle(t *testing.T) {
-	r := Row{AccountUsage: ok("max", nil, f(20), nil)}
+	u := ok("team", nil, f(20), nil)
+	u.Plan = "team"
+	r := Row{AccountUsage: u}
 	v := Window5h(r, now)
 	if v.Used != "0%" || v.Left != "100%" || v.Reset != "idle" || !v.Idle || v.Low || v.Limited {
 		t.Fatalf("%+v", v)
 	}
 	if w := Window7d(r, now); w.Idle || w.Used != "20%" || w.Left != "80%" {
 		t.Fatalf("%+v", w)
+	}
+}
+
+func TestWindowViewMaxHasNoFiveHourLimit(t *testing.T) {
+	v := Window5h(Row{AccountUsage: ok("m", nil, f(20), nil)}, now)
+	if !v.NoLimit || v.Reset != NoLimitText {
+		t.Fatalf("%+v", v)
+	}
+	if w := Window5h(Row{AccountUsage: ok("m", f(3), f(20), nil)}, now); w.NoLimit {
+		t.Fatalf("reported window marked no-limit: %+v", w)
 	}
 }
 
@@ -89,6 +101,7 @@ func TestStateLabel(t *testing.T) {
 
 func TestRenderIdleAndLowRows(t *testing.T) {
 	idle, low := ok("idle", nil, f(5), nil), ok("low", f(96), f(5), nil)
+	idle.Plan = "team"
 	rows := []Row{{AccountUsage: idle}, {AccountUsage: low}}
 	out := Render(rows, usage.Aggregate([]usage.AccountUsage{idle, low}), now)
 	line := lineFor(out, "idle")
@@ -118,7 +131,7 @@ func lineFor(out, prefix string) string {
 }
 
 func TestPickBestIdleHasFullHeadroom(t *testing.T) {
-	got, found := PickBest([]usage.AccountUsage{ok("a", f(50), f(10), nil), ok("idle", nil, nil, nil)})
+	got, found := PickBest([]usage.AccountUsage{ok("a", f(50), f(10), nil), ok("idle", nil, nil, nil)}, now)
 	if !found || got.Account != "idle" {
 		t.Fatalf("%v %v", got, found)
 	}
@@ -198,14 +211,14 @@ func TestPickBestSkipsHiddenDuplicate(t *testing.T) {
 	m.AccountUUID = "u"
 	a := ok("admin", f(80), f(10), nil)
 	a.AccountUUID = "u"
-	got, found := PickBest([]usage.AccountUsage{m, a})
+	got, found := PickBest([]usage.AccountUsage{m, a}, now)
 	if !found || got.Account != "main" {
 		t.Fatalf("%v", got)
 	}
 	// The only usable account is the canonical one; the duplicate is never offered.
 	lim := ok("main", f(100), f(10), nil)
 	lim.AccountUUID = "u"
-	if got, found := PickBest([]usage.AccountUsage{lim, a}); found {
+	if got, found := PickBest([]usage.AccountUsage{lim, a}, now); found {
 		t.Fatalf("duplicate of a limited login must not be picked: %v", got)
 	}
 }

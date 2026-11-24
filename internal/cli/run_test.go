@@ -94,7 +94,7 @@ func TestBestPicksMostHeadroomAndRunsIt(t *testing.T) {
 	if code != 3 {
 		t.Fatalf("code=%d err=%s", code, e.err)
 	}
-	if !strings.Contains(e.err.String(), "ccm: using work (5h 30% used, 7d 10% used)") {
+	if !strings.Contains(e.err.String(), "ccm: using work (5h 30% used, 7d 10% used; 90% weekly left, 70% 5h left)") {
 		t.Fatalf("err=%s", e.err)
 	}
 	calls := e.callsTo(e.p.RealClaude)

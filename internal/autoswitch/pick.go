@@ -63,7 +63,7 @@ func PickNext(p paths.Paths, exclude []string, now time.Time) (registry.Account,
 			candidates = append(candidates, u)
 		}
 	}
-	best, ok := status.PickBest(candidates)
+	best, ok := status.PickBest(candidates, now)
 	if !ok {
 		return registry.Account{}, false
 	}

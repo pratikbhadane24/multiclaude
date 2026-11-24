@@ -58,6 +58,7 @@ func (m Model) detailLines() []string {
 		joinNonEmpty(title),
 		styleDim.Render("state ") + st.Render(state) + sep + styleDim.Render("refreshed "+age(now, m.lastRefresh)+" ago"),
 		styleDim.Render("5h ") + windowText(status.Window5h(r, now), resetAt(r, true), now) + styleDim.Render(sep+"7d ") + windowText(status.Window7d(r, now), resetAt(r, false), now),
+		m.bestDetail(r),
 		m.todayDetail(),
 		m.argsLine(r.Account),
 		styleDim.Render("health ") + m.healthText(r.Account),
@@ -85,6 +86,9 @@ func resetAt(r status.Row, five bool) *time.Time {
 }
 
 func windowText(v status.WindowView, reset *time.Time, now time.Time) string {
+	if v.NoLimit {
+		return styleDim.Render("no limit on this plan")
+	}
 	if v.Idle {
 		return styleDim.Render("idle (no window running)")
 	}
@@ -152,4 +156,18 @@ func groupHealth(checks []doctor.Check, name string, match func(string) bool) (s
 		}
 	}
 	return styleOK.Render("ok"), found
+}
+
+// bestDetail says which account ★ marks and why ("★ best (this one): 52%
+// weekly left, resets in 7h40m").
+func (m Model) bestDetail(r status.Row) string {
+	best, score, ok := m.bestScored()
+	if !ok {
+		return styleDim.Render(bestText+" best ") + styleWarn.Render("none free")
+	}
+	who := best.Account
+	if who == r.Account {
+		who = "this one"
+	}
+	return styleGold.Render(bestText) + styleDim.Render(" best ") + who + styleDim.Render(sep+score.Reason())
 }

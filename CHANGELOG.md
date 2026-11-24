@@ -15,10 +15,14 @@ Notable changes to multiclaude. The format follows [Keep a Changelog](https://ke
 
 ### Changed
 
+- The best account (`ccm best`, `continue`, dashboard ★, auto-switch) now uses up weekly quota that expires soonest first, instead of picking the most headroom. Accounts with under 10% left in either window are used only when nothing else is free.
+- Dashboard: new 7D RESET column (gold when quota is left and it resets within 24h), and the Details panel says why ★ picked its account.
+- A Max account with no 5h window shows `no limit` instead of `idle`.
 - Logins are also read from an account's `.credentials.json` when the Keychain has none (SSH sessions).
 
 ### Fixed
 
+- `ccm best`, `continue` and the dashboard counted a window as used even after its reset time passed (auto-switch already did not).
 - Chat history (`projects`, `file-history`, `todos`, `plans`) is shared even when `~/.claude` has none yet, as on a fresh worker. Before, each account kept its own chats there, so an auto-switch resume on another account failed with "No conversation found". `ccm sync` merges chats that were already split.
 
 ## v0.1.0 - 2026-11-23
