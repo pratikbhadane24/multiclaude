@@ -213,7 +213,30 @@ func (s *Setup) PushSetup(ctx context.Context) error {
 	if err := s.runOK(ctx, remoteCCM+" config set default-account best"); err != nil {
 		return err
 	}
-	return s.pushDefaultArgs(ctx)
+	if err := s.pushDefaultArgs(ctx); err != nil {
+		return err
+	}
+	return s.pushAutoSwitch(ctx)
+}
+
+// pushAutoSwitch makes the worker's auto-switch setting and resume prompt
+// match the hub's, so a limit hit on a worker resumes on another account.
+func (s *Setup) pushAutoSwitch(ctx context.Context) error {
+	cfg, err := config.Load(s.P)
+	if err != nil {
+		return fmt.Errorf("read hub ccm config: %w", err)
+	}
+	state := "off"
+	if cfg.AutoSwitch {
+		state = "on"
+	}
+	if err := s.runOK(ctx, remoteCCM+" config set auto-switch "+state); err != nil {
+		return err
+	}
+	if cfg.AutoSwitchPrompt == "" {
+		return s.runOK(ctx, remoteCCM+" config clear auto-switch-prompt")
+	}
+	return s.runOK(ctx, remoteCCM+" config set auto-switch-prompt "+shQuote(cfg.AutoSwitchPrompt))
 }
 
 // pushDefaultArgs makes the worker's default claude args (e.g.
@@ -436,7 +459,7 @@ func (s *Setup) EnsureAccounts(ctx context.Context, names []string, emails map[s
 
 // Doctor runs `ccm doctor` on the worker and shows its output.
 func (s *Setup) Doctor(ctx context.Context) error {
-	res, err := s.R.Run(ctx, remoteCCM+" doctor")
+	res, err := s.R.Run(ctx, remoteCCM+" doctor --worker")
 	if err != nil {
 		return err
 	}

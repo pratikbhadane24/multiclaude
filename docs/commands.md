@@ -25,7 +25,7 @@
 | `ccm worker list` | Workers and their accounts. |
 | `ccm sync` | Link shared items, merge account history, copy MCP servers into every account. |
 | `ccm t3-sync` | Add or update one `claude-<account>` instance per account and sync `launchArgs`. Backs up T3 settings; restart T3 after. |
-| `ccm doctor [--fix]` | Check (and repair) the setup. Exit 0 only if nothing fails or warns. |
+| `ccm doctor [--fix] [--worker]` | Check (and repair) the setup. Exit 0 only if nothing fails or warns. `--worker` skips main's login (used by worker setup). |
 | `ccm remove <name> [--purge]` | Unregister (and optionally delete). |
 | `ccm shell-init zsh [--worker]` | Print the zsh wrapper and PATH line for `~/.zshrc`. `--worker` also defines `claude()` to run the launcher. |
 | `ccm install` | Install the launcher and the `ccm` link. |

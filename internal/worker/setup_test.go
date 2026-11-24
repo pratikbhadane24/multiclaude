@@ -319,3 +319,36 @@ func TestPushSetupClearsDefaultArgsWhenHubHasNone(t *testing.T) {
 		t.Fatalf("scripts = %v", r.scripts)
 	}
 }
+
+func ranScript(r *fakeRemote, want string) bool {
+	return slices.ContainsFunc(r.scripts, func(sc string) bool { return strings.Contains(sc, want) })
+}
+
+func TestPushSetupCopiesAutoSwitchAndPrompt(t *testing.T) {
+	r := newFakeRemote()
+	s := newSetup(t, r)
+	if err := config.Save(s.P, config.Config{AutoSwitch: true, AutoSwitchPrompt: "keep going"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.PushSetup(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if !ranScript(r, "config set auto-switch on") || !ranScript(r, "config set auto-switch-prompt 'keep going'") {
+		t.Fatalf("scripts = %v", r.scripts)
+	}
+}
+
+func TestPushSetupTurnsAutoSwitchOffWhenHubHasItOff(t *testing.T) {
+	r := newFakeRemote()
+	s := newSetup(t, r)
+
+	if err := s.PushSetup(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if !ranScript(r, "config set auto-switch off") || !ranScript(r, "config clear auto-switch-prompt") {
+		t.Fatalf("scripts = %v", r.scripts)
+	}
+}

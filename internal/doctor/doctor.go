@@ -62,6 +62,8 @@ type Deps struct {
 	MCPSync         func(p paths.Paths, dir string) (bool, error)
 	KeychainPresent func(ctx context.Context, a registry.Account) (bool, error)
 	T3HasInstance   func(a registry.Account) (bool, error)
+	// Worker skips main's login check: on a worker, ccm never logs main in.
+	Worker bool
 	// Identity (optional) returns an account's login identity: the keychain
 	// account UUID and the email; either may be empty when unknown.
 	Identity func(ctx context.Context, a registry.Account) (uuid, email string)
@@ -77,7 +79,9 @@ func Run(ctx context.Context, d Deps, fix bool) []Check {
 			out = append(out, linkChecks(d, a, fix)...)
 			out = append(out, mcpCheck(d, a, fix))
 		}
-		out = append(out, keychainCheck(ctx, d, a))
+		if !(d.Worker && a.IsMain()) {
+			out = append(out, keychainCheck(ctx, d, a))
+		}
 		if t3 {
 			out = append(out, t3Check(d, a))
 		}

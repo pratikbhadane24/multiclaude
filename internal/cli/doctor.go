@@ -14,18 +14,21 @@ import (
 	"github.com/pratikbhadane24/multiclaude/internal/t3"
 )
 
-// cmdDoctor handles `ccm doctor [--fix]`.
+// cmdDoctor handles `ccm doctor [--fix] [--worker]`.
 func (a *App) cmdDoctor(ctx context.Context, args []string) int {
 	fs := a.newFlags("doctor")
 	fix := fs.Bool("fix", false, "repair shared links and MCP drift")
-	if _, code, ok := a.parseArgs(fs, args, 0, "doctor [--fix]"); !ok {
+	worker := fs.Bool("worker", false, "skip main's login check (main is unused on a worker)")
+	if _, code, ok := a.parseArgs(fs, args, 0, "doctor [--fix] [--worker]"); !ok {
 		return code
 	}
 	accts, err := registry.Load(a.Paths)
 	if err != nil {
 		return a.errorf("%v", err)
 	}
-	code, text := doctor.Summary(doctor.Run(ctx, a.doctorDeps(accts), *fix))
+	deps := a.doctorDeps(accts)
+	deps.Worker = *worker
+	code, text := doctor.Summary(doctor.Run(ctx, deps, *fix))
 	a.printf("%s", text)
 	return code
 }

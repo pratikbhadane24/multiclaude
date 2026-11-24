@@ -271,3 +271,24 @@ func TestRunSkipsT3ChecksWhenT3NotSetUp(t *testing.T) {
 		}
 	}
 }
+
+// On a worker, main (~/.claude) is never logged in by ccm, so its login is
+// not checked; the worker's own accounts still are.
+func TestWorkerSkipsMainLoginCheck(t *testing.T) {
+	s := healthy
+	s.keychainOK = false
+	d, c := build(s, []registry.Account{mainAcct, workAcct})
+	d.Worker = true
+
+	cs := Run(context.Background(), d, false)
+
+	if _, ok := find(cs, "main", "keychain"); ok {
+		t.Fatal("main login checked on a worker")
+	}
+	if got, ok := find(cs, "work", "keychain"); !ok || got.Status != StatusWarn {
+		t.Fatalf("work login check = %+v %v", got, ok)
+	}
+	if c.keychain != 1 {
+		t.Fatalf("keychain calls = %d, want 1", c.keychain)
+	}
+}
