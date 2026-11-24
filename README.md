@@ -14,6 +14,7 @@ multiclaude gives every account its own login and plan limits while sharing one 
 - **Usage at a glance.** A dashboard and a status line show 5-hour and 7-day usage per account.
 - **Hand-off.** `ccm continue` resumes a chat on the account with the most room. Optional auto-switch does it for you when a limit is hit.
 - **T3 Code.** Every account can be added as a T3 Code instance.
+- **Workers.** Set up other Macs as workers with one command, then run agents on them from [Orca](https://github.com/stablyai/orca) while your accounts and setup stay in step.
 
 > macOS only. multiclaude is an unofficial tool and is not affiliated with or endorsed by Anthropic. See [Disclaimer](#disclaimer).
 
@@ -64,6 +65,18 @@ ccm best       start Claude on the account with the most room left
 ccm continue   carry on this folder's last chat on a free account
 ccm work       start Claude on the account called "work"
 ```
+
+## Workers
+
+Run Claude on other Macs (for example a Mac mini) while you stay on your main one. Get SSH to the worker working over [Tailscale](https://tailscale.com) first (steps in [Workers](docs/workers.md#before-you-start-once-per-worker)), then:
+
+```sh
+ccm worker add worker1 --accounts work,personal   # set up the Mac and log its accounts in
+ccm worker status                                 # load, memory, sessions and logins per worker
+ccm worker sync --all                             # push setup changes from this Mac
+```
+
+In Orca, add the worker under Settings → SSH and pick it under **Run on**. Each worker logs in its own accounts (logins are never copied between Macs), uses the account with the most room, and copies your auto-switch setting. Chats stay on the worker that ran them.
 
 ## Documentation
 

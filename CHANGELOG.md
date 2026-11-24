@@ -10,10 +10,16 @@ Notable changes to multiclaude. The format follows [Keep a Changelog](https://ke
 - `ccm config set default-account best`: plain `claude` starts on the account with the most headroom.
 - `ccm list --json` and `ccm shell-init zsh --worker`.
 - `ccm worker add` copies your git identity, installs `gh` and signs it in to GitHub on the worker.
+- `ccm worker add|sync` copy the hub's auto-switch setting and resume prompt to the worker.
+- `ccm doctor --worker` skips main's login check. Worker setup uses it, since ccm never logs main in on a worker.
 
 ### Changed
 
 - Logins are also read from an account's `.credentials.json` when the Keychain has none (SSH sessions).
+
+### Fixed
+
+- Chat history (`projects`, `file-history`, `todos`, `plans`) is shared even when `~/.claude` has none yet, as on a fresh worker. Before, each account kept its own chats there, so an auto-switch resume on another account failed with "No conversation found". `ccm sync` merges chats that were already split.
 
 ## v0.1.0 - 2026-11-23
 

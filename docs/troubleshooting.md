@@ -64,8 +64,19 @@ User-scope MCP servers are copied from `main` on every launch that goes through 
 - It only follows a known conversation. A bare `--resume` (the picker), a search term or `--fork-session` runs without auto-switch, with a warning.
 - Only usage-limit errors trigger it. Server, network, billing and login errors never do.
 - Quitting Claude yourself never switches.
+- On a worker, check `ccm config show` there. Workers set up before auto-switch was copied had it `off`. Run `ccm worker sync --all` on the hub.
 
 Details are in [Auto-switch](auto-switch.md).
+
+## `No conversation found` after a switch
+
+The chat lives only in the account that started it, so the other account cannot resume it. This happens when an account kept its own `projects` folder instead of the shared one. `ccm doctor` shows it as `projects is no longer shared`. Close Claude in that account, then run:
+
+```sh
+ccm sync          # on the Mac with the problem (on a worker: ssh into it first)
+```
+
+It merges the account's chats into the shared history and links it. Then resume again.
 
 ## Reporting a bug
 

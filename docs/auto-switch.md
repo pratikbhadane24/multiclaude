@@ -8,6 +8,8 @@ ccm config set auto-switch-prompt "keep going"   # optional: replace the resume 
 ccm config clear auto-switch-prompt
 ```
 
+On [workers](workers.md), `ccm worker add` and `ccm worker sync` copy this setting from the hub. A worker switches only between its own accounts, because its chats live on that Mac.
+
 It applies to every interactive launch: `ccm <name>`, `run`, `best`, `continue` and ⏎ in the dashboard (which shows `⟳ auto-switch` and skips its "Continue on X?" prompt). With it on:
 
 1. Each launch pins a known conversation: a new chat gets `--session-id <uuid>`, `--resume <id>` is kept and `--continue` is turned into `--resume <latest id for this folder>`. A bare `--resume` (the picker), a search term or `--fork-session` cannot be followed, so that launch runs without auto-switch (with a warning).

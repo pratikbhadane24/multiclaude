@@ -50,6 +50,12 @@ Never pushed: chat history (`projects`, `file-history`, `todos`, `plans`), login
 
 Repositories are not copied. When you pick the worker under **Run on** in Orca, Orca offers to clone the project there. Work moves between machines through GitHub, so push from one Mac and pull on the other.
 
+## Add another worker
+
+Repeat the steps in **Before you start** on the new Mac with a new SSH name, then run `ccm worker add worker2 --accounts ...`. Give each worker different accounts for the most total room. One account can still be on several workers, since each one logs in separately.
+
+Tailscale adds `-1` to a name that is already taken, so a second Mac called `mac-mini` shows as `mac-mini-1`. Use the name `tailscale status` prints as the `HostName`.
+
 ## Day to day
 
 ```sh
@@ -65,4 +71,7 @@ On a worker, plain `claude` starts on the worker account with the most room, jud
 - **Logins on workers are files.** Over SSH the macOS Keychain is locked, so Claude Code keeps each login in that account's `.credentials.json` (mode 0600). ccm reads it there; it never writes it.
 - **Chats stay on the worker** that ran them. They are shared between that worker's accounts, not with the hub.
 - **MCP runtimes** (`npx`, `uvx`) are not installed for you. If your MCP servers need them, install them on the worker yourself, for example `brew install node uv`.
+- **Logging in:** the login link should open in a browser signed in to that account. If the browser is signed in to another Claude account, use a private window, or the wrong account logs in.
+- **Network:** a worker on 2.4 GHz Wi-Fi can be slow enough to make SSH lag. Use 5 GHz or Ethernet. `ccm worker status` shows whether each worker is reachable.
+- **Auto-switch** is copied from the hub. A worker switches only between its own accounts. When all of them are limited, it waits for the soonest reset.
 - **FileVault and reboots:** after a reboot, a worker with FileVault waits at the unlock screen, and SSH and Tailscale come back only after you unlock it.
